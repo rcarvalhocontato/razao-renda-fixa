@@ -12,7 +12,16 @@
 <link rel="manifest" href="manifest.json" />
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-  * { box-sizing: border-box; } body { margin: 0; background:#0A0D12; }
+  * { box-sizing: border-box; }
+  html { background:#0A0D12; }
+  body {
+    margin: 0;
+    background:#0A0D12;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    min-height: 100dvh;
+  }
+  #root { min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: #1C232E; border-radius: 4px; }
@@ -34,7 +43,7 @@
       root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0A0D12;font-family:sans-serif;padding:24px;">' +
         '<div style="max-width:420px;text-align:center;color:#EDEFF3;">' +
         '<p style="font-size:16px;font-weight:700;margin-bottom:8px;">O app não conseguiu carregar</p>' +
-        '<p style="font-size:13px;color:#98A2AF;line-height:1.5;">O aplicativo não conseguiu iniciar o React. Verifique sua conexão e, se estiver usando bloqueador de conteúdo, permita scripts para esta página e recarregue.</p>' +
+        '<p style="font-size:13px;color:#98A2AF;line-height:1.5;">Isso costuma acontecer quando o navegador bloqueou scripts externos (React/Babel) — por bloqueador de anúncios/scripts, modo offline, ou rede restrita (ex: wi-fi corporativo). Verifique sua conexão, desative bloqueadores para esta página e recarregue.</p>' +
         '</div></div>';
     }
   }, 7000);
@@ -105,13 +114,23 @@ function diffDays(d1, d2) { return Math.round((new Date(d2 + 'T00:00:00') - new 
 function fmtBRL(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function fmtData(d) { if (!d) return '—'; const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; }
 function fmtPct(v) { if (v === null || v === undefined || Number.isNaN(v)) return '—'; return (Number(v)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function bcbDateToISO(d) { const [dd, mm, yyyy] = d.split('/'); return `${yyyy}-${mm}-${dd}`; }
 function aliquotaIRPorDias(dias) { if (dias <= 180) return 22.5; if (dias <= 360) return 20; if (dias <= 720) return 17.5; return 15; }
 function aliquotaIOFPorDias(dias) { if (dias >= 30) return 0; if (dias <= 0) return 100; return IOF_TABLE[dias - 1]; }
-function fatorAcumulado(serieDiaria, d1, d2) {
+function fatorAcumulado(serieDiaria, d1, d2, multiplicador = 1) {
   let fator = 1;
-  for (let i = 0; i < serieDiaria.length; i++) { const item = serieDiaria[i]; if (item.data > d1 && item.data <= d2) fator *= (1 + item.valor / 100); }
+  for (let i = 0; i < serieDiaria.length; i++) {
+    const item = serieDiaria[i];
+    if (item.data > d1 && item.data <= d2) {
+      // Para "x% do CDI/Selic", o percentual multiplica a taxa de cada dia:
+      // fator = produto(1 + taxa_diaria × x/100).
+      fator *= (1 + (item.valor / 100) * multiplicador);
+    }
+  }
   return fator;
 }
 async function fetchHistoricoDiario(codigo, dataInicialISO, dataFinalISO) {
@@ -168,10 +187,10 @@ function calcMetrics(inv, today, ref) {
   const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
   let valorAtualBruto, precisao = 'estimado';
   if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
-    valorAtualBruto = ancoraValor * Math.pow(fatorAcumulado(ref.historicoCDI, ancoraData, today), (Number(inv.parametroValor) || 0) / 100);
+    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, today, (Number(inv.parametroValor) || 0) / 100);
     precisao = 'historico';
   } else if (!usaOverride && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
-    valorAtualBruto = ancoraValor * Math.pow(fatorAcumulado(ref.historicoSelic, ancoraData, today), (Number(inv.parametroValor) || 0) / 100);
+    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, today, (Number(inv.parametroValor) || 0) / 100);
     precisao = 'historico';
   } else {
     valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, duDesdeAncora / 252);
@@ -193,16 +212,20 @@ function calcMetrics(inv, today, ref) {
   const duRestantes = diasUteisEntre(today, inv.dataVencimento);
   const valorEstBrutoVenc = valorAtualBruto * Math.pow(1 + taxaAnual / 100, Math.max(duRestantes, 0) / 252);
   const ganhoEstVenc = valorEstBrutoVenc - inv.valorAplicado;
+  const diasAteVencimento = Math.max(diffDays(inv.dataAplicacao, inv.dataVencimento), 0);
+  const iofAliqVenc = diasAteVencimento < 30 ? aliquotaIOFPorDias(diasAteVencimento) : 0;
+  const iofValorVenc = ganhoEstVenc > 0 ? ganhoEstVenc * (iofAliqVenc / 100) : 0;
+  const ganhoAposIOFVenc = ganhoEstVenc - iofValorVenc;
   const aliqIRVenc = inv.isentoIR ? 0 : (inv.aliquotaIRManual !== '' && inv.aliquotaIRManual != null ? Number(inv.aliquotaIRManual) : aliquotaIRPorDias(diasTotais));
-  const irValorVenc = ganhoEstVenc > 0 ? ganhoEstVenc * (aliqIRVenc / 100) : 0;
-  const valorEstLiquidoVenc = valorEstBrutoVenc - irValorVenc;
+  const irValorVenc = ganhoAposIOFVenc > 0 ? ganhoAposIOFVenc * (aliqIRVenc / 100) : 0;
+  const valorEstLiquidoVenc = valorEstBrutoVenc - iofValorVenc - irValorVenc;
 
-  const cdiMensal = (Math.pow(1 + ref.cdi / 100, 1 / 12) - 1) * 100;
+  const cdiMensal = (Math.pow(1 + ref.cdi / 100, 21 / 252) - 1) * 100;
   const pctCDIBruto = cdiMensal !== 0 && rentBrutaMensal !== null ? (rentBrutaMensal / cdiMensal) * 100 : null;
   const pctCDILiquido = cdiMensal !== 0 && rentLiquidaMensal !== null ? (rentLiquidaMensal / cdiMensal) * 100 : null;
 
   return { diasCorridos, diasTotais, diasRestantes, valorAtualBruto, ganhoBruto, iofAliq, iofValor, aliqIR, irValor,
-    valorAtualLiquido, valorEstBrutoVenc, ganhoEstVenc, valorEstLiquidoVenc, taxaAnual, projetado, ancoraData, precisao,
+    valorAtualLiquido, valorEstBrutoVenc, ganhoEstVenc, iofAliqVenc, iofValorVenc, aliqIRVenc, irValorVenc, valorEstLiquidoVenc, taxaAnual, projetado, ancoraData, precisao,
     rentBrutaTotal, rentLiquidaTotal, rentBrutaMensal, rentLiquidaMensal, pctCDIBruto, pctCDILiquido };
 }
 function buildEvolutionSeries(list, metricsById, today) {
@@ -227,10 +250,10 @@ function valorProjetadoEm(inv, dataAlvo, ref, today) {
   const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
   const passado = dataAlvo <= today;
   if (!usaOverride && passado && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
-    return ancoraValor * Math.pow(fatorAcumulado(ref.historicoCDI, ancoraData, dataAlvo), (Number(inv.parametroValor) || 0) / 100);
+    return ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100);
   }
   if (!usaOverride && passado && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
-    return ancoraValor * Math.pow(fatorAcumulado(ref.historicoSelic, ancoraData, dataAlvo), (Number(inv.parametroValor) || 0) / 100);
+    return ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100);
   }
   const du = diasUteisEntre(ancoraData, dataAlvo);
   const taxaAnual = taxaAnualEfetiva(inv, ref);
@@ -277,7 +300,7 @@ function buildRentabilidadeMensalMatrix(ativos, ref, today) {
       if (valorInicio > 0) { somaPeso += valorInicio; somaPesoRetorno += valorInicio * (valorFim / valorInicio - 1); }
     });
     const retornoCarteira = somaPeso > 0 ? (somaPesoRetorno / somaPeso) * 100 : null;
-    const retornoCDI = ref.historicoCDI && ref.historicoCDI.length ? (fatorAcumulado(ref.historicoCDI, inicioStr, fimStr) - 1) * 100 : null;
+    const retornoCDI = ref.historicoCDI && ref.historicoCDI.length ? (fatorAcumulado(ref.historicoCDI, inicioStr, fimStr, 1) - 1) * 100 : null;
     if (!anos[y]) anos[y] = { carteira: Array(12).fill(null), cdi: Array(12).fill(null) };
     anos[y].carteira[m] = retornoCarteira;
     anos[y].cdi[m] = retornoCDI;
@@ -302,7 +325,11 @@ function buildAlocacaoInstituicao(ativos, metricsById) {
   })).sort((a, b) => b.total - a.total);
 }
 async function fetchTaxasBCB() {
-  const series = { selic: 432, cdi: 4391, ipca: 13522 };
+  // BCB SGS:
+  // 432 = Meta Selic (% a.a.)
+  // 4389 = CDI anualizado, base 252 (% a.a.)
+  // 13522 = IPCA acumulado em 12 meses (%)
+  const series = { selic: 432, cdi: 4389, ipca: 13522 };
   const entries = await Promise.all(Object.entries(series).map(async ([chave, codigo]) => {
     const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados/ultimos/1?formato=json`);
     if (!resp.ok) throw new Error('BCB indisponível: ' + chave);
@@ -313,7 +340,11 @@ async function fetchTaxasBCB() {
 }
 
 const emptyForm = { instituicao: '', tipo: 'CDB', indexador: 'CDI', parametroValor: '', dataAplicacao: '', dataVencimento: '', valorAplicado: '', liquidez: 'No vencimento', isentoIR: false, aliquotaIRManual: '', taxaOverrideAnual: '', carteira: '', observacoes: '' };
-const defaultRef = { cdi: 13.90, selic: 14.00, ipca: 4.64, atualizado: '2026-08-11', fonte: 'manual' };
+const defaultRef = {
+  cdi: 14.90, selic: 14.00, ipca: 4.64,
+  dataCDI: '2026-08-11', dataSelic: '2026-08-11', dataIPCA: '2026-06-01',
+  atualizado: '2026-08-11', fonte: 'manual'
+};
 
 /* ------------------------------------------------------------------ */
 /* Componentes de apoio                                                 */
@@ -429,14 +460,15 @@ function TaxasBar({ refTaxas, status, onRefresh, onSaveManual, historicoStatus, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(refTaxas);
   useEffect(() => { setDraft(refTaxas); }, [refTaxas]);
-  const diasDesatualizado = Math.max(diffDays(refTaxas.atualizado, todayStr()), 0);
-  const desatualizado = status !== 'carregando' && diasDesatualizado > 1;
+  const dataReferenciaDiaria = refTaxas.dataCDI || refTaxas.atualizado || todayStr();
+  const diasDesatualizado = Math.max(diffDays(dataReferenciaDiaria, todayStr()), 0);
+  const desatualizado = status !== 'carregando' && diasDesatualizado > 3;
   const dotCor = desatualizado ? '#E8A33D' : status === 'conectado' ? C.lime : status === 'carregando' ? C.blue : status === 'manual' ? C.slate : C.red;
   const label = desatualizado ? `Taxas há ${diasDesatualizado} dias sem checar — toque para atualizar`
-    : status === 'conectado' ? 'Banco Central · ao vivo' : status === 'carregando' ? 'Tentando conectar ao Banco Central…' : status === 'manual' ? 'Valores mantidos manualmente' : 'Conexão automática indisponível aqui';
+    : status === 'conectado' ? 'Banco Central · atualizado' : status === 'carregando' ? 'Atualizando taxas do Banco Central…' : status === 'manual' ? 'Valores mantidos manualmente' : 'Conexão automática indisponível aqui';
   const totalPregoes = (historicoCDICount || 0) + (historicoSelicCount || 0);
   const histLabel = historicoStatus === 'carregando' ? 'baixando o histórico diário do CDI/Selic…'
-    : historicoStatus === 'ok' ? `histórico diário carregado (${totalPregoes} pregões) — CDI/Selic compostos dia a dia, com a taxa real de cada época`
+    : historicoStatus === 'ok' ? `histórico diário carregado (${totalPregoes} pregões) — CDI/Selic compostos dia a dia, aplicando o % contratado à taxa de cada pregão`
     : historicoStatus === 'erro' ? 'não consegui baixar o histórico diário — usando taxa atual constante como estimativa' : null;
   return <div style={{ maxWidth: 1152, margin: '16px auto 0', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', padding: '4px 4px 12px' }}>
     <button onClick={onRefresh} title="Tentar buscar novamente no Banco Central" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -449,13 +481,14 @@ function TaxasBar({ refTaxas, status, onRefresh, onSaveManual, historicoStatus, 
       {[['CDI', refTaxas.cdi], ['Selic', refTaxas.selic], ['IPCA 12m', refTaxas.ipca]].map(([lbl, v]) => (
         <div key={lbl} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}><span style={{ color: C.muted, fontSize: 11 }}>{lbl}</span><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 600 }}>{fmtPct(v)}</span></div>
       ))}
-      <span style={{ color: C.muted, fontSize: 10.5 }}>· {fmtData(refTaxas.atualizado)}</span>
+      <span style={{ color: C.muted, fontSize: 10.5 }}>· ref. CDI {fmtData(refTaxas.dataCDI)} · Selic {fmtData(refTaxas.dataSelic)} · IPCA {fmtData(refTaxas.dataIPCA)}</span>
+      <span style={{ color: C.muted, fontSize: 10.5 }}>· CDI anualizado (base 252)</span>
       <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 11, textDecoration: 'underline', cursor: 'pointer' }}>editar</button>
     </> : <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
       {[['cdi', 'CDI'], ['selic', 'Selic'], ['ipca', 'IPCA 12m']].map(([k, lbl]) => (
         <div key={k}><div style={{ color: C.muted, fontSize: 10 }}>{lbl}</div><input type="number" style={{ ...inputStyle, width: 90, padding: '4px 8px' }} value={draft[k]} onChange={e => setDraft(d => ({ ...d, [k]: e.target.value }))} /></div>
       ))}
-      <button onClick={() => { onSaveManual({ ...draft, cdi: Number(draft.cdi), selic: Number(draft.selic), ipca: Number(draft.ipca), atualizado: todayStr(), fonte: 'manual' }); setEditing(false); }} style={{ background: C.lime, border: 'none', color: '#10160A', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Salvar</button>
+      <button onClick={() => { onSaveManual({ ...draft, cdi: Number(draft.cdi), selic: Number(draft.selic), ipca: Number(draft.ipca), dataCDI: todayStr(), dataSelic: todayStr(), dataIPCA: todayStr(), atualizado: todayStr(), fonte: 'manual' }); setEditing(false); }} style={{ background: C.lime, border: 'none', color: '#10160A', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Salvar</button>
       <button onClick={() => { setDraft(refTaxas); setEditing(false); }} style={{ background: 'none', border: `1px solid ${C.hairline}`, color: C.muted, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
     </div>}
     {histLabel && <div style={{ width: '100%', color: C.muted, fontSize: 10.5 }}>{histLabel}</div>}
@@ -487,7 +520,16 @@ function App() {
   const refreshTaxas = useCallback(() => {
     setTaxaStatus('carregando');
     fetchTaxasBCB().then(data => {
-      const novo = { cdi: data.cdi.valor, selic: data.selic.valor, ipca: data.ipca.valor, atualizado: today, fonte: 'bcb' };
+      const novo = {
+        cdi: data.cdi.valor,
+        selic: data.selic.valor,
+        ipca: data.ipca.valor,
+        dataCDI: data.cdi.data,
+        dataSelic: data.selic.data,
+        dataIPCA: data.ipca.data,
+        atualizado: today,
+        fonte: 'bcb'
+      };
       setRefTaxas(novo); setTaxaStatus('conectado'); storage.set('rf-taxas-referencia', JSON.stringify(novo));
     }).catch(() => setTaxaStatus('offline'));
   }, [today]);
