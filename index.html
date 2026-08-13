@@ -21,9 +21,9 @@
   input[type=date] { color-scheme: dark; } select { color-scheme: dark; }
   input::placeholder, textarea::placeholder { color: #6B7480; opacity: .8; }
 </style>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.27.1/babel.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -34,7 +34,7 @@
       root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0A0D12;font-family:sans-serif;padding:24px;">' +
         '<div style="max-width:420px;text-align:center;color:#EDEFF3;">' +
         '<p style="font-size:16px;font-weight:700;margin-bottom:8px;">O app não conseguiu carregar</p>' +
-        '<p style="font-size:13px;color:#98A2AF;line-height:1.5;">Isso costuma acontecer quando o navegador bloqueou scripts externos (React/Babel) — por bloqueador de anúncios/scripts, modo offline, ou rede restrita (ex: wi-fi corporativo). Verifique sua conexão, desative bloqueadores para esta página e recarregue.</p>' +
+        '<p style="font-size:13px;color:#98A2AF;line-height:1.5;">O aplicativo não conseguiu iniciar o React. Verifique sua conexão e, se estiver usando bloqueador de conteúdo, permita scripts para esta página e recarregue.</p>' +
         '</div></div>';
     }
   }, 7000);
