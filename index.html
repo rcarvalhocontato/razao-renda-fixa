@@ -347,7 +347,7 @@ async function fetchTaxasBCB() {
   return Object.fromEntries(entries);
 }
 
-const emptyForm = { instituicao: '', tipo: 'CDB', indexador: 'CDI', parametroValor: '', dataAplicacao: '', dataVencimento: '', valorAplicado: '', liquidez: 'No vencimento', isentoIR: false, aliquotaIRManual: '', taxaOverrideAnual: '', carteira: '', observacoes: '' };
+const emptyForm = { instituicao: '', tipo: 'CDB', indexador: 'CDI', parametroValor: '', dataAplicacao: '', dataVencimento: '', valorAplicado: '', liquidez: 'No vencimento', isentoIR: false, aliquotaIRManual: '', taxaOverrideAnual: '', carteira: '', observacoes: '', vincularA: '' };
 const defaultRef = {
   cdi: 14.90, selic: 14.00, ipca: 4.64,
   dataCDI: '2026-08-11', dataSelic: '2026-08-11', dataIPCA: '2026-06-01',
@@ -578,7 +578,7 @@ function App() {
   async function persistRefManual(r) { setRefTaxas(r); setTaxaStatus('manual'); await storage.set('rf-taxas-referencia', JSON.stringify(r)); }
 
   function openNew() { setForm(emptyForm); setEditingId(null); setFormError(''); setShowForm(true); }
-  function openEdit(inv) { setForm({ ...inv, valorAplicado: String(inv.valorAplicado), parametroValor: inv.parametroValor ?? '', aliquotaIRManual: inv.aliquotaIRManual ?? '', taxaOverrideAnual: inv.taxaOverrideAnual ?? '', carteira: inv.carteira || '' }); setEditingId(inv.id); setFormError(''); setShowForm(true); }
+  function openEdit(inv) { setForm({ ...inv, valorAplicado: String(inv.valorAplicado), parametroValor: inv.parametroValor ?? '', aliquotaIRManual: inv.aliquotaIRManual ?? '', taxaOverrideAnual: inv.taxaOverrideAnual ?? '', carteira: inv.carteira || '', vincularA: inv.groupId || '' }); setEditingId(inv.id); setFormError(''); setShowForm(true); }
   function handleTipoChange(tipo) { setForm(f => ({ ...f, tipo, isentoIR: TIPO_META[tipo].isentoDefault })); }
 
   function handleSave() {
@@ -588,7 +588,9 @@ function App() {
     if (form.dataVencimento <= form.dataAplicacao) return setFormError('O vencimento deve ser após a data de aplicação.');
     const valor = Number(form.valorAplicado);
     if (!valor || valor <= 0) return setFormError('Informe um valor aplicado válido.');
-    const campos = { instituicao: form.instituicao.trim(), tipo: form.tipo, indexador: form.indexador, parametroValor: form.parametroValor === '' ? 0 : Number(form.parametroValor), dataAplicacao: form.dataAplicacao, dataVencimento: form.dataVencimento, valorAplicado: valor, liquidez: form.liquidez, isentoIR: !!form.isentoIR, aliquotaIRManual: form.aliquotaIRManual === '' ? '' : Number(form.aliquotaIRManual), taxaOverrideAnual: form.taxaOverrideAnual === '' ? '' : Number(form.taxaOverrideAnual), carteira: form.carteira.trim(), observacoes: form.observacoes };
+    const grupoSelecionado = form.vincularA ? investments.find(inv => inv.id === form.vincularA || (inv.groupId || inv.id) === form.vincularA) : null;
+    const groupId = grupoSelecionado ? (grupoSelecionado.groupId || grupoSelecionado.id) : (editingId ? ((investments.find(inv => inv.id === editingId)?.groupId) || editingId) : uid());
+    const campos = { instituicao: form.instituicao.trim(), tipo: form.tipo, indexador: form.indexador, parametroValor: form.parametroValor === '' ? 0 : Number(form.parametroValor), dataAplicacao: form.dataAplicacao, dataVencimento: form.dataVencimento, valorAplicado: valor, liquidez: form.liquidez, isentoIR: !!form.isentoIR, aliquotaIRManual: form.aliquotaIRManual === '' ? '' : Number(form.aliquotaIRManual), taxaOverrideAnual: form.taxaOverrideAnual === '' ? '' : Number(form.taxaOverrideAnual), carteira: form.carteira.trim(), observacoes: form.observacoes, groupId };
     if (editingId) {
       persist(investments.map(inv => inv.id === editingId ? { ...inv, ...campos, historico: (inv.historico && inv.historico.length) ? inv.historico.map(h => (h.data === inv.dataAplicacao && h.valorBruto === inv.valorAplicado) ? { ...h, data: campos.dataAplicacao, valorBruto: valor } : h) : [{ id: uid(), data: campos.dataAplicacao, valorBruto: valor }] } : inv));
     } else {
@@ -613,7 +615,7 @@ function App() {
   const calendarioVencimentos = useMemo(() => { const meses = []; const base = new Date(); for (let i = 0; i < 12; i++) { const d = new Date(base.getFullYear(), base.getMonth() + i, 1); meses.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }), valor: 0 }); } ativos.forEach(inv => { const key = inv.dataVencimento.slice(0, 7); const alvo = meses.find(m => m.key === key); if (alvo) alvo.valor += metricsById[inv.id].valorAtualBruto; }); return meses; }, [ativos, metricsById]);
   const evolucao = useMemo(() => buildEvolutionSeries(ativos, metricsById, today), [ativos, metricsById, today]);
   const proximosVencimentos = useMemo(() => ativos.slice().sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)).slice(0, 6), [ativos]);
-  const listaFiltrada = useMemo(() => { let base = investments; if (filtro === 'Ativas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes >= 0); if (filtro === 'Vencidas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes < 0); if (filtro === 'Resgatadas') base = investments.filter(i => i.status === 'resgatado'); return base.slice().sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)); }, [investments, filtro, metricsById]);
+  const listaFiltrada = useMemo(() => { let base = investments; if (filtro === 'Ativas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes >= 0); if (filtro === 'Vencidas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes < 0); if (filtro === 'Resgatadas') base = investments.filter(i => i.status === 'resgatado'); return base.slice().sort((a, b) => { const ga = grupoIdDe(a), gb = grupoIdDe(b); return ga.localeCompare(gb) || a.dataVencimento.localeCompare(b.dataVencimento) || a.dataAplicacao.localeCompare(b.dataAplicacao); }); }, [investments, filtro, metricsById]);
   const ranking = useMemo(() => { const list = ativos.slice(); const cmp = { rentLiquidaMensal: (a, b) => (metricsById[b.id].rentLiquidaMensal ?? -999) - (metricsById[a.id].rentLiquidaMensal ?? -999), rentLiquidaTotal: (a, b) => metricsById[b.id].rentLiquidaTotal - metricsById[a.id].rentLiquidaTotal, vencimento: (a, b) => a.dataVencimento.localeCompare(b.dataVencimento), valorAplicado: (a, b) => b.valorAplicado - a.valorAplicado }; return list.sort(cmp[rankBy]); }, [ativos, metricsById, rankBy]);
 
   return <div style={{ background: C.bg, color: C.text, minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>
@@ -654,7 +656,7 @@ function App() {
         {tab === 'lista' && <ListaAplicacoes filtro={filtro} setFiltro={setFiltro} lista={listaFiltrada} metricsById={metricsById} refTaxas={refComHistorico} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir} />}
       </>}
     </main>
-    {showForm && <FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={refComHistorico} onClose={() => setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange} />}
+    {showForm && <FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={refComHistorico} investments={investments} onClose={() => setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange} />}
   </div>;
 }
 
@@ -786,8 +788,8 @@ function RankingTab({ ranking, metricsById, refTaxas, rankBy, setRankBy }) {
 }
 
 function exportarCSV(lista, metricsById, refTaxas) {
-  const header = ['Instituição', 'Tipo', 'Indexador', 'Taxa contratada', 'Carteira', 'Data aplicação', 'Data vencimento', 'Valor aplicado', 'Valor atual bruto', 'Valor atual líquido', 'Rent. líquida mensal %', 'Rent. líquida total %', '% do CDI líquido', 'Status'];
-  const linhas = lista.map(inv => { const m = metricsById[inv.id]; return [inv.instituicao, inv.tipo, inv.indexador, descricaoTaxa(inv, refTaxas), inv.carteira || '', fmtData(inv.dataAplicacao), fmtData(inv.dataVencimento), inv.valorAplicado.toFixed(2), m.valorAtualBruto.toFixed(2), m.valorAtualLiquido.toFixed(2), m.rentLiquidaMensal !== null ? m.rentLiquidaMensal.toFixed(2) : '', m.rentLiquidaTotal.toFixed(2), m.pctCDILiquido !== null ? m.pctCDILiquido.toFixed(1) : '', inv.status].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'); });
+  const header = ['Grupo', 'Instituição', 'Tipo', 'Indexador', 'Taxa contratada', 'Carteira', 'Data aplicação', 'Data vencimento', 'Valor aplicado', 'Valor atual bruto', 'Valor atual líquido', 'Rent. líquida mensal %', 'Rent. líquida total %', '% do CDI líquido', 'Status'];
+  const linhas = lista.map(inv => { const m = metricsById[inv.id]; return [grupoIdDe(inv), inv.instituicao, inv.tipo, inv.indexador, descricaoTaxa(inv, refTaxas), inv.carteira || '', fmtData(inv.dataAplicacao), fmtData(inv.dataVencimento), inv.valorAplicado.toFixed(2), m.valorAtualBruto.toFixed(2), m.valorAtualLiquido.toFixed(2), m.rentLiquidaMensal !== null ? m.rentLiquidaMensal.toFixed(2) : '', m.rentLiquidaTotal.toFixed(2), m.pctCDILiquido !== null ? m.pctCDILiquido.toFixed(1) : '', inv.status].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'); });
   const csv = '\uFEFF' + [header.join(';'), ...linhas].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -795,6 +797,11 @@ function exportarCSV(lista, metricsById, refTaxas) {
   URL.revokeObjectURL(url);
 }
 
+function grupoIdDe(inv) { return inv.groupId || inv.id; }
+function resumoGrupo(lista, metricsById, groupId) {
+  const itens = lista.filter(inv => grupoIdDe(inv) === groupId);
+  return itens.reduce((acc, inv) => { const m = metricsById[inv.id]; acc.qtd += 1; acc.aplicado += inv.valorAplicado; acc.bruto += m.valorAtualBruto; acc.liquido += m.valorAtualLiquido; acc.estimado += m.valorEstLiquidoVenc; return acc; }, { qtd: 0, aplicado: 0, bruto: 0, liquido: 0, estimado: 0 });
+}
 function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expandedId, setExpandedId, openEdit, deleteInvestment, historicoDraft, setHistoricoDraft, addHistorico, resgatandoId, setResgatandoId, resgateDraft, setResgateDraft, confirmResgate, reabrir }) {
   return <div>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
@@ -802,10 +809,27 @@ function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expa
       {lista.length > 0 && <button onClick={() => exportarCSV(lista, metricsById, refTaxas)} style={{ background: C.panel, color: C.mutedLight, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Exportar CSV</button>}
     </div>
     {lista.length === 0 ? <p style={{ color: C.muted, fontSize: 14 }}>Nenhuma aplicação nesse filtro.</p> : (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{lista.map(inv => {
-        const m = metricsById[inv.id]; const vencida = inv.status === 'ativo' && m.diasRestantes < 0; const expanded = expandedId === inv.id;
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{lista.map((inv, idx) => {
+        const m = metricsById[inv.id];
+        const gid = grupoIdDe(inv);
+        const anterior = idx > 0 ? lista[idx - 1] : null;
+        const inicioGrupo = !anterior || grupoIdDe(anterior) !== gid;
+        const membrosGrupo = lista.filter(x => grupoIdDe(x) === gid);
+        const rg = inicioGrupo && membrosGrupo.length > 1 ? resumoGrupo(lista, metricsById, gid) : null; const vencida = inv.status === 'ativo' && m.diasRestantes < 0; const expanded = expandedId === inv.id;
         const hist = (inv.historico || []).slice().sort((a, b) => b.data.localeCompare(a.data));
-        return <div key={inv.id} style={{ background: C.panel, borderRadius: 16, padding: 16, boxShadow: shadow, borderTop: `1px solid ${vencida ? C.red + '55' : C.hairline}` }}>
+        return <React.Fragment key={inv.id}>
+          {inicioGrupo && rg && <div style={{ background: C.panel2, border: `1px solid ${C.hairline}`, borderRadius: 14, padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div><div style={{ fontSize: 10.5, color: C.lime, textTransform: 'uppercase', fontWeight: 800, letterSpacing: '.04em' }}>Investimento agrupado · {rg.qtd} aportes</div><div style={{ fontWeight: 700, fontSize: 14, marginTop: 3 }}>{inv.instituicao} · {inv.tipo} · {descricaoTaxa(inv, refTaxas)}</div><div style={{ color: C.muted, fontSize: 11, marginTop: 3 }}>Aportes separados para o cálculo; visão consolidada para o controle. Cada aporte conserva sua própria data de aplicação e vencimento.</div></div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,auto)', gap: 14, textAlign: 'right' }}>
+                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Aplicado</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtBRL(rg.aplicado)}</div></div>
+                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Atual bruto</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtBRL(rg.bruto)}</div></div>
+                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Atual líquido</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.lime }}>{fmtBRL(rg.liquido)}</div></div>
+                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Projeção</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.blue }}>{fmtBRL(rg.estimado)}</div></div>
+              </div>
+            </div>
+          </div>}
+          <div style={{ background: C.panel, borderRadius: 16, padding: 16, boxShadow: shadow, borderTop: `1px solid ${vencida ? C.red + '55' : C.hairline}`, marginLeft: membrosGrupo.length > 1 ? 10 : 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 200 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -871,15 +895,27 @@ function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expa
             ) : <button onClick={() => { setResgatandoId(inv.id); setResgateDraft({ data: todayStr(), valor: Math.round(m.valorAtualLiquido * 100) / 100 }); }} style={{ alignSelf: 'flex-start', background: C.panel2, color: C.lime, border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="check" size={14} /> Registrar resgate</button>
             ) : <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 13, color: C.muted }}>Recebido líquido: <b style={{ color: C.text }}>{fmtBRL(inv.valorLiquidoRecebido)}</b></span><button onClick={() => reabrir(inv.id)} style={{ background: 'none', color: C.muted, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>Reabrir</button></div>}
           </div>}
-        </div>;
+          </div>
+        </React.Fragment>;
       })}</div>
     )}
   </div>;
 }
 
-function FormModal({ form, setForm, editingId, formError, refTaxas, onClose, onSave, onTipoChange }) {
+function FormModal({ form, setForm, editingId, formError, refTaxas, investments, onClose, onSave, onTipoChange }) {
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  function handleVincularChange(e) {
+    const value = e.target.value;
+    const base = value ? investments.find(inv => inv.id === value || (inv.groupId || inv.id) === value) : null;
+    if (!base) { setForm(f => ({ ...f, vincularA: '' })); return; }
+    setForm(f => ({ ...f, vincularA: base.groupId || base.id, instituicao: base.instituicao, tipo: base.tipo, indexador: base.indexador, parametroValor: base.parametroValor ?? '', liquidez: base.liquidez || f.liquidez, isentoIR: !!base.isentoIR, aliquotaIRManual: base.aliquotaIRManual ?? '', taxaOverrideAnual: base.taxaOverrideAnual ?? '', carteira: base.carteira || f.carteira }));
+  }
   const efetiva = taxaAnualEfetiva({ ...form, parametroValor: form.parametroValor }, refTaxas);
+  const gruposExistentes = investments.filter(i => i.status === 'ativo' && i.id !== editingId).reduce((acc, inv) => {
+    const gid = inv.groupId || inv.id;
+    if (!acc.some(x => x.id === gid)) acc.push({ id: gid, inv });
+    return acc;
+  }, []);
   return <div style={{ position: 'fixed', inset: 0, background: '#000000C0', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto', zIndex: 50 }}>
     <div style={{ background: C.panel, borderRadius: 18, width: '100%', maxWidth: 620, padding: 24, boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -888,6 +924,7 @@ function FormModal({ form, setForm, editingId, formError, refTaxas, onClose, onS
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
         <Field label="Instituição / emissor"><input style={inputStyle} placeholder="Ex: Banco XP, Rico, Itaú…" value={form.instituicao} onChange={set('instituicao')} /></Field>
+        <Field label="Vincular a investimento existente" hint="Agrupa os aportes na visão do aplicativo, mas cada aporte mantém seu próprio cálculo."><select style={inputStyle} value={form.vincularA || ''} onChange={handleVincularChange}><option value="">Não vincular — novo investimento</option>{gruposExistentes.map(({ id, inv }) => <option key={id} value={id}>{inv.instituicao} · {inv.tipo} · {descricaoTaxa(inv, refTaxas)} · vence {fmtData(inv.dataVencimento)}</option>)}</select></Field>
         <Field label="Tipo"><select style={inputStyle} value={form.tipo} onChange={e => onTipoChange(e.target.value)}>{TIPOS.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
         <Field label="Indexador"><select style={inputStyle} value={form.indexador} onChange={set('indexador')}>{INDEXADORES.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
         <Field label={parametroLabel(form.indexador)} hint={`taxa efetiva calculada: ${fmtPct(efetiva)} a.a.`}><input type="number" style={inputStyle} placeholder="Ex: 110" value={form.parametroValor} onChange={set('parametroValor')} /></Field>
