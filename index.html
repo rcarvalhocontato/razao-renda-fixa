@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Razão — Controle de Renda Fixa</title>
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Razão" />
+<meta name="theme-color" content="#0A0D12" />
+<link rel="apple-touch-icon" href="icon.png" />
+<link rel="manifest" href="manifest.json" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; } body { margin: 0; background:#0A0D12; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .scrollbar-thin::-webkit-scrollbar { height: 6px; width: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #1C232E; border-radius: 4px; }
+  table { font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: #1C232E; }
+  input[type=date] { color-scheme: dark; } select { color-scheme: dark; }
+  input::placeholder, textarea::placeholder { color: #6B7480; opacity: .8; }
+</style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback } = React;
+const {
+  PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis,
+  CartesianGrid, ResponsiveContainer, LineChart, Line
+} = Recharts;
+
+/* ------------------------------------------------------------------ */
+/* Armazenamento local (substitui o window.storage do ambiente Claude) */
+/* ------------------------------------------------------------------ */
+const storage = {
+  async get(key) { const v = localStorage.getItem(key); return v === null ? null : { key, value: v }; },
+  async set(key, value) { localStorage.setItem(key, value); return { key, value }; },
+};
+
+/* ------------------------------------------------------------------ */
+/* Tokens                                                              */
+/* ------------------------------------------------------------------ */
+const C = {
+  bg: '#0A0D12', panel: '#141922', panel2: '#1C232E', hairline: 'rgba(255,255,255,0.06)',
+  text: '#EDEFF3', muted: '#6B7480', mutedLight: '#98A2AF',
+  lime: '#C6F135', red: '#F0555D', blue: '#5B9DF0', slate: '#7C93AC',
+};
+const shadow = '0 1px 2px rgba(0,0,0,.5), 0 12px 28px -12px rgba(0,0,0,.65)';
+
+const TIPOS = ['CDB', 'LCI', 'LCA', 'CRI', 'CRA', 'Tesouro Direto', 'Debênture'];
+const INDEXADORES = ['CDI', 'IPCA+', 'Prefixado', 'SELIC', 'Outro'];
+const LIQUIDEZ_OPTS = ['Diária', 'No vencimento'];
+const TIPO_META = {
+  'CDB': { cor: C.blue, isentoDefault: false }, 'LCI': { cor: C.lime, isentoDefault: true },
+  'LCA': { cor: C.lime, isentoDefault: true }, 'CRI': { cor: C.lime, isentoDefault: true },
+  'CRA': { cor: C.lime, isentoDefault: true }, 'Tesouro Direto': { cor: C.slate, isentoDefault: false },
+  'Debênture': { cor: C.red, isentoDefault: false },
+};
+const INDEXADOR_COR = { 'CDI': C.lime, 'IPCA+': C.blue, 'Prefixado': C.slate, 'SELIC': C.red, 'Outro': C.muted };
+const IOF_TABLE = [96,93,90,86,83,80,76,73,70,66,63,60,56,53,50,46,43,40,36,33,30,26,23,20,16,13,10,6,3,0];
+
+/* ------------------------------------------------------------------ */
+/* Ícones (SVG próprios — evita depender de mais um pacote externo)    */
+/* ------------------------------------------------------------------ */
+function Icon({ name, size = 16, color = 'currentColor' }) {
+  const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  const paths = {
+    plus: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
+    x: <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>,
+    pencil: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></>,
+    trash: <><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /></>,
+    chevronDown: <polyline points="6 9 12 15 18 9" />,
+    chevronUp: <polyline points="18 15 12 9 6 15" />,
+    alert: <><path d="M12 9v4" /><path d="M12 17h.01" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /></>,
+    history: <><path d="M3 3v5h5" /><path d="M3.1 13a9 9 0 1 0 2.6-7.4L3 8" /><path d="M12 7v5l4 2" /></>,
+    wallet: <><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5" /><path d="M18 12h.01" /></>,
+    check: <path d="m5 13 4 4L19 7" />,
+    trophy: <><path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0Z" /><path d="M17 5h3a3 3 0 0 1-3 4" /><path d="M7 5H4a3 3 0 0 0 3 4" /></>,
+    refresh: <><path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 3 21 9 15 9" /></>,
+    grid: <><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></>,
+    listOrdered: <><line x1="10" y1="6" x2="21" y2="6" /><line x1="10" y1="12" x2="21" y2="12" /><line x1="10" y1="18" x2="21" y2="18" /><path d="M4 6h1v4" /><path d="M4 10h2" /><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></>,
+    listChecks: <><path d="m3 6 2 2 4-4" /><path d="m3 14 2 2 4-4" /><line x1="12" y1="6" x2="21" y2="6" /><line x1="12" y1="14" x2="21" y2="14" /></>,
+  };
+  return <svg {...p}>{paths[name]}</svg>;
+}
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                              */
+/* ------------------------------------------------------------------ */
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function diffDays(d1, d2) { return Math.round((new Date(d2 + 'T00:00:00') - new Date(d1 + 'T00:00:00')) / 86400000); }
+function fmtBRL(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function fmtData(d) { if (!d) return '—'; const [y, m, day] = d.split('-'); return `${day}/${m}/${y}`; }
+function fmtPct(v) { if (v === null || v === undefined || Number.isNaN(v)) return '—'; return (Number(v)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function bcbDateToISO(d) { const [dd, mm, yyyy] = d.split('/'); return `${yyyy}-${mm}-${dd}`; }
+function aliquotaIRPorDias(dias) { if (dias <= 180) return 22.5; if (dias <= 360) return 20; if (dias <= 720) return 17.5; return 15; }
+function aliquotaIOFPorDias(dias) { if (dias >= 30) return 0; if (dias <= 0) return 100; return IOF_TABLE[dias - 1]; }
+function fatorAcumulado(serieDiaria, d1, d2) {
+  let fator = 1;
+  for (let i = 0; i < serieDiaria.length; i++) { const item = serieDiaria[i]; if (item.data > d1 && item.data <= d2) fator *= (1 + item.valor / 100); }
+  return fator;
+}
+async function fetchHistoricoDiario(codigo, dataInicialISO, dataFinalISO) {
+  const [yi, mi, di] = dataInicialISO.split('-'); const [yf, mf, df] = dataFinalISO.split('-');
+  const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados?dataInicial=${di}/${mi}/${yi}&dataFinal=${df}/${mf}/${yf}&formato=json`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('histórico BCB indisponível');
+  const json = await resp.json();
+  return json.map(item => ({ data: bcbDateToISO(item.data), valor: parseFloat(item.valor.replace(',', '.')) }));
+}
+function diasUteisEntre(d1, d2) {
+  const start = new Date(d1 + 'T00:00:00'), end = new Date(d2 + 'T00:00:00');
+  if (end <= start) return 0;
+  let count = 0; const cur = new Date(start); cur.setDate(cur.getDate() + 1);
+  while (cur <= end) { const dow = cur.getDay(); if (dow !== 0 && dow !== 6) count++; cur.setDate(cur.getDate() + 1); }
+  return count;
+}
+function parametroLabel(indexador) {
+  switch (indexador) {
+    case 'CDI': return '% do CDI'; case 'SELIC': return '% da Selic';
+    case 'IPCA+': return 'Spread sobre o IPCA (% a.a.)'; case 'Prefixado': return 'Taxa fixa (% a.a.)';
+    default: return 'Taxa estimada (% a.a.)';
+  }
+}
+function taxaAnualEfetiva(inv, ref) {
+  const p = Number(inv.parametroValor) || 0; let rate;
+  if (inv.indexador === 'CDI') rate = ref.cdi * (p / 100);
+  else if (inv.indexador === 'SELIC') rate = ref.selic * (p / 100);
+  else if (inv.indexador === 'IPCA+') rate = ((1 + ref.ipca / 100) * (1 + p / 100) - 1) * 100;
+  else if (inv.indexador === 'Prefixado') rate = p;
+  else rate = p;
+  if (inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual))) rate = Number(inv.taxaOverrideAnual);
+  return rate;
+}
+function descricaoTaxa(inv, ref) {
+  const p = Number(inv.parametroValor) || 0; const efetiva = taxaAnualEfetiva(inv, ref);
+  if (inv.indexador === 'CDI') return `${p}% do CDI (≈ ${fmtPct(efetiva)} a.a.)`;
+  if (inv.indexador === 'SELIC') return `${p}% da Selic (≈ ${fmtPct(efetiva)} a.a.)`;
+  if (inv.indexador === 'IPCA+') return `IPCA+ ${p}% (≈ ${fmtPct(efetiva)} a.a.)`;
+  if (inv.indexador === 'Prefixado') return `${fmtPct(p)} a.a. (prefixado)`;
+  return `${fmtPct(p)} a.a.`;
+}
+function calcMetrics(inv, today, ref) {
+  const diasCorridos = Math.max(diffDays(inv.dataAplicacao, today), 0);
+  const diasTotais = Math.max(diffDays(inv.dataAplicacao, inv.dataVencimento), 1);
+  const diasRestantes = diffDays(today, inv.dataVencimento);
+  const taxaAnual = taxaAnualEfetiva(inv, ref);
+  const hist = (inv.historico || []).slice().sort((a, b) => a.data.localeCompare(b.data));
+  let ancoraData = inv.dataAplicacao, ancoraValor = inv.valorAplicado;
+  hist.forEach(h => { if (h.data <= today) { ancoraData = h.data; ancoraValor = h.valorBruto; } });
+  const diasDesdeAncora = Math.max(diffDays(ancoraData, today), 0);
+  const duDesdeAncora = diasUteisEntre(ancoraData, today);
+  const projetado = diasDesdeAncora > 0;
+  const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
+  let valorAtualBruto, precisao = 'estimado';
+  if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
+    valorAtualBruto = ancoraValor * Math.pow(fatorAcumulado(ref.historicoCDI, ancoraData, today), (Number(inv.parametroValor) || 0) / 100);
+    precisao = 'historico';
+  } else if (!usaOverride && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
+    valorAtualBruto = ancoraValor * Math.pow(fatorAcumulado(ref.historicoSelic, ancoraData, today), (Number(inv.parametroValor) || 0) / 100);
+    precisao = 'historico';
+  } else {
+    valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, duDesdeAncora / 252);
+  }
+  const ganhoBruto = valorAtualBruto - inv.valorAplicado;
+
+  const iofAliq = diasCorridos < 30 ? aliquotaIOFPorDias(diasCorridos) : 0;
+  const iofValor = ganhoBruto > 0 ? ganhoBruto * (iofAliq / 100) : 0;
+  const ganhoAposIOF = ganhoBruto - iofValor;
+  const aliqIR = inv.isentoIR ? 0 : (inv.aliquotaIRManual !== '' && inv.aliquotaIRManual != null ? Number(inv.aliquotaIRManual) : aliquotaIRPorDias(diasCorridos));
+  const irValor = ganhoAposIOF > 0 ? ganhoAposIOF * (aliqIR / 100) : 0;
+  const valorAtualLiquido = valorAtualBruto - iofValor - irValor;
+
+  const rentBrutaTotal = (valorAtualBruto / inv.valorAplicado - 1) * 100;
+  const rentLiquidaTotal = (valorAtualLiquido / inv.valorAplicado - 1) * 100;
+  const rentBrutaMensal = diasCorridos > 0 ? (Math.pow(valorAtualBruto / inv.valorAplicado, 30 / diasCorridos) - 1) * 100 : null;
+  const rentLiquidaMensal = diasCorridos > 0 ? (Math.pow(Math.max(valorAtualLiquido, 0.0001) / inv.valorAplicado, 30 / diasCorridos) - 1) * 100 : null;
+
+  const duRestantes = diasUteisEntre(today, inv.dataVencimento);
+  const valorEstBrutoVenc = valorAtualBruto * Math.pow(1 + taxaAnual / 100, Math.max(duRestantes, 0) / 252);
+  const ganhoEstVenc = valorEstBrutoVenc - inv.valorAplicado;
+  const aliqIRVenc = inv.isentoIR ? 0 : (inv.aliquotaIRManual !== '' && inv.aliquotaIRManual != null ? Number(inv.aliquotaIRManual) : aliquotaIRPorDias(diasTotais));
+  const irValorVenc = ganhoEstVenc > 0 ? ganhoEstVenc * (aliqIRVenc / 100) : 0;
+  const valorEstLiquidoVenc = valorEstBrutoVenc - irValorVenc;
+
+  const cdiMensal = (Math.pow(1 + ref.cdi / 100, 1 / 12) - 1) * 100;
+  const pctCDIBruto = cdiMensal !== 0 && rentBrutaMensal !== null ? (rentBrutaMensal / cdiMensal) * 100 : null;
+  const pctCDILiquido = cdiMensal !== 0 && rentLiquidaMensal !== null ? (rentLiquidaMensal / cdiMensal) * 100 : null;
+
+  return { diasCorridos, diasTotais, diasRestantes, valorAtualBruto, ganhoBruto, iofAliq, iofValor, aliqIR, irValor,
+    valorAtualLiquido, valorEstBrutoVenc, ganhoEstVenc, valorEstLiquidoVenc, taxaAnual, projetado, ancoraData, precisao,
+    rentBrutaTotal, rentLiquidaTotal, rentBrutaMensal, rentLiquidaMensal, pctCDIBruto, pctCDILiquido };
+}
+function buildEvolutionSeries(list, metricsById, today) {
+  const events = [];
+  list.forEach(inv => {
+    events.push({ date: inv.dataAplicacao, id: inv.id, valor: inv.valorAplicado });
+    (inv.historico || []).forEach(h => events.push({ date: h.data, id: inv.id, valor: h.valorBruto }));
+    if (metricsById && metricsById[inv.id]) events.push({ date: today, id: inv.id, valor: metricsById[inv.id].valorAtualBruto });
+  });
+  const dates = [...new Set(events.map(e => e.date))].sort();
+  const last = {};
+  return dates.map(date => {
+    events.filter(e => e.date === date).forEach(e => { last[e.id] = e.valor; });
+    const total = Object.values(last).reduce((a, b) => a + b, 0);
+    return { date: fmtData(date), total };
+  });
+}
+function valorProjetadoEm(inv, dataAlvo, ref, today) {
+  const hist = (inv.historico || []).slice().sort((a, b) => a.data.localeCompare(b.data));
+  let ancoraData = inv.dataAplicacao, ancoraValor = inv.valorAplicado;
+  hist.forEach(h => { if (h.data <= dataAlvo) { ancoraData = h.data; ancoraValor = h.valorBruto; } });
+  const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
+  const passado = dataAlvo <= today;
+  if (!usaOverride && passado && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
+    return ancoraValor * Math.pow(fatorAcumulado(ref.historicoCDI, ancoraData, dataAlvo), (Number(inv.parametroValor) || 0) / 100);
+  }
+  if (!usaOverride && passado && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
+    return ancoraValor * Math.pow(fatorAcumulado(ref.historicoSelic, ancoraData, dataAlvo), (Number(inv.parametroValor) || 0) / 100);
+  }
+  const du = diasUteisEntre(ancoraData, dataAlvo);
+  const taxaAnual = taxaAnualEfetiva(inv, ref);
+  return ancoraValor * Math.pow(1 + taxaAnual / 100, Math.max(du, 0) / 252);
+}
+function buildMonthlySeriesForInv(inv, ref, today) {
+  const pontos = [];
+  const aplicDate = new Date(inv.dataAplicacao + 'T00:00:00');
+  const hoje = new Date(today + 'T00:00:00');
+  let y = aplicDate.getFullYear(), m = aplicDate.getMonth();
+  while (true) {
+    const fimMes = new Date(y, m + 1, 0);
+    if (fimMes >= hoje) break;
+    const dataStr = fimMes.toISOString().slice(0, 10);
+    pontos.push({ label: fimMes.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }), bruto: valorProjetadoEm(inv, dataStr, ref, today) });
+    m++; if (m > 11) { m = 0; y++; }
+  }
+  pontos.push({ label: 'hoje', bruto: valorProjetadoEm(inv, today, ref, today) });
+  return pontos;
+}
+async function fetchTaxasBCB() {
+  const series = { selic: 432, cdi: 4391, ipca: 13522 };
+  const entries = await Promise.all(Object.entries(series).map(async ([chave, codigo]) => {
+    const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados/ultimos/1?formato=json`);
+    if (!resp.ok) throw new Error('BCB indisponível: ' + chave);
+    const json = await resp.json(); const item = json[0];
+    return [chave, { valor: parseFloat(item.valor.replace(',', '.')), data: bcbDateToISO(item.data) }];
+  }));
+  return Object.fromEntries(entries);
+}
+
+const emptyForm = { instituicao: '', tipo: 'CDB', indexador: 'CDI', parametroValor: '', dataAplicacao: '', dataVencimento: '', valorAplicado: '', liquidez: 'No vencimento', isentoIR: false, aliquotaIRManual: '', taxaOverrideAnual: '', carteira: '', observacoes: '' };
+const defaultRef = { cdi: 13.90, selic: 14.00, ipca: 4.64, atualizado: '2026-08-11', fonte: 'manual' };
+
+/* ------------------------------------------------------------------ */
+/* Componentes de apoio                                                 */
+/* ------------------------------------------------------------------ */
+function TipoTag({ tipo }) {
+  const meta = TIPO_META[tipo] || { cor: C.muted };
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px', borderRadius: 20, background: meta.cor + '1C', color: meta.cor, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: meta.cor }} />{tipo}</span>;
+}
+function Delta({ value, size = 12 }) {
+  if (value === null || value === undefined || Number.isNaN(value)) return <span style={{ color: C.muted, fontSize: size }}>—</span>;
+  const up = value >= 0;
+  return <span style={{ color: up ? C.lime : C.red, fontSize: size, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", display: 'inline-flex', alignItems: 'center', gap: 3 }}>{up ? '▲' : '▼'} {fmtPct(Math.abs(value))}</span>;
+}
+function MaturityBar({ diasCorridos, diasTotais, vencida }) {
+  const pct = Math.min(100, Math.max(0, (diasCorridos / diasTotais) * 100));
+  return <div style={{ height: 4, background: C.panel2, borderRadius: 2, overflow: 'hidden' }}><div style={{ height: '100%', width: pct + '%', background: vencida ? C.red : C.lime }} /></div>;
+}
+function Field({ label, children, hint }) {
+  return <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}><span style={{ color: C.muted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700 }}>{label}</span>{children}{hint && <span style={{ color: C.muted, fontSize: 11 }}>{hint}</span>}</label>;
+}
+const inputStyle = { background: C.bg, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '9px 11px', color: C.text, fontFamily: "'Inter', sans-serif", fontSize: 13.5, width: '100%', outline: 'none' };
+function StatCard({ label, value, delta, sub, accent }) {
+  return <div style={{ background: C.panel, borderRadius: 16, padding: '16px 18px', boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
+    <div style={{ color: C.muted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, fontWeight: 700 }}>{label}</div>
+    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 20, fontWeight: 600, color: accent || C.text, letterSpacing: '-0.01em' }}>{value}</div>
+    <div style={{ marginTop: 6, minHeight: 16 }}>{delta !== undefined ? <Delta value={delta} /> : sub ? <span style={{ color: C.muted, fontSize: 11.5 }}>{sub}</span> : null}</div>
+  </div>;
+}
+function Badge({ cor, texto, icon }) { return <span style={{ background: cor + '1C', color: cor, borderRadius: 20, padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: 4 }}>{icon}{texto}</span>; }
+function Mini({ label, value, accent }) { return <div><div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>{label}</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5, color: accent || C.text }}>{value}</div></div>; }
+function SectionLabel({ children, icon }) { return <div style={{ color: C.lime, fontSize: 10.5, textTransform: 'uppercase', fontWeight: 700, marginBottom: 8, display: 'flex', gap: 6, alignItems: 'center' }}>{icon}{children}</div>; }
+function IconBtn({ children, onClick, title, danger }) { return <button onClick={onClick} title={title} style={{ background: C.panel2, border: 'none', color: danger ? C.red : C.mutedLight, borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>{children}</button>; }
+function Panel({ title, subtitle, children, right }) {
+  return <section style={{ background: C.panel, borderRadius: 16, padding: '20px 20px 8px', boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+      <div><h3 style={{ fontSize: 13.5, fontWeight: 700, margin: 0, color: C.text }}>{title}</h3>{subtitle && <p style={{ color: C.muted, fontSize: 12, marginTop: 4, marginBottom: 14 }}>{subtitle}</p>}</div>
+      {right}
+    </div>
+    <div style={{ marginTop: subtitle ? 0 : 14, paddingBottom: 16 }}>{children}</div>
+  </section>;
+}
+function PieBlock({ data }) {
+  if (!data.length) return <p style={{ color: C.muted, fontSize: 13 }}>Sem dados.</p>;
+  return <div style={{ width: '100%', height: 230 }}><ResponsiveContainer><PieChart>
+    <Pie data={data} dataKey="value" nameKey="name" innerRadius={54} outerRadius={82} paddingAngle={3}>{data.map((d, i) => <Cell key={i} fill={d.cor} stroke={C.panel} strokeWidth={3} />)}</Pie>
+    <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
+    <Legend wrapperStyle={{ fontSize: 11.5, color: C.muted }} />
+  </PieChart></ResponsiveContainer></div>;
+}
+function Hero({ liquido, deltaPct, ganho }) {
+  return <div style={{ background: `linear-gradient(155deg, ${C.panel}, ${C.bg})`, borderRadius: 20, padding: 26, marginBottom: 20, boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
+    <div style={{ color: C.muted, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', marginBottom: 8 }}>Patrimônio líquido em renda fixa</div>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 38, fontWeight: 700, letterSpacing: '-0.02em' }}>{fmtBRL(liquido)}</div>
+      <div style={{ paddingBottom: 8 }}><Delta value={deltaPct} size={15} /></div>
+    </div>
+    <div style={{ color: C.muted, fontSize: 12.5, marginTop: 6 }}>Ganho líquido acumulado: <span style={{ color: ganho >= 0 ? C.lime : C.red, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtBRL(ganho)}</span></div>
+  </div>;
+}
+function TaxasBar({ refTaxas, status, onRefresh, onSaveManual, historicoStatus, historicoCDICount, historicoSelicCount }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(refTaxas);
+  useEffect(() => { setDraft(refTaxas); }, [refTaxas]);
+  const diasDesatualizado = Math.max(diffDays(refTaxas.atualizado, todayStr()), 0);
+  const desatualizado = status !== 'carregando' && diasDesatualizado > 1;
+  const dotCor = desatualizado ? '#E8A33D' : status === 'conectado' ? C.lime : status === 'carregando' ? C.blue : status === 'manual' ? C.slate : C.red;
+  const label = desatualizado ? `Taxas há ${diasDesatualizado} dias sem checar — toque para atualizar`
+    : status === 'conectado' ? 'Banco Central · ao vivo' : status === 'carregando' ? 'Tentando conectar ao Banco Central…' : status === 'manual' ? 'Valores mantidos manualmente' : 'Conexão automática indisponível aqui';
+  const totalPregoes = (historicoCDICount || 0) + (historicoSelicCount || 0);
+  const histLabel = historicoStatus === 'carregando' ? 'baixando o histórico diário do CDI/Selic…'
+    : historicoStatus === 'ok' ? `histórico diário carregado (${totalPregoes} pregões) — CDI/Selic compostos dia a dia, com a taxa real de cada época`
+    : historicoStatus === 'erro' ? 'não consegui baixar o histórico diário — usando taxa atual constante como estimativa' : null;
+  return <div style={{ maxWidth: 1152, margin: '16px auto 0', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', padding: '4px 4px 12px' }}>
+    <button onClick={onRefresh} title="Tentar buscar novamente no Banco Central" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotCor }} />
+      <span style={{ fontSize: 11, color: C.mutedLight }}>{label}</span>
+      <span style={status === 'carregando' ? { display: 'inline-flex', animation: 'spin 0.9s linear infinite' } : { display: 'inline-flex' }}><Icon name="refresh" size={12} color={C.muted} /></span>
+    </button>
+    <div style={{ width: 1, height: 14, background: C.hairline }} />
+    {!editing ? <>
+      {[['CDI', refTaxas.cdi], ['Selic', refTaxas.selic], ['IPCA 12m', refTaxas.ipca]].map(([lbl, v]) => (
+        <div key={lbl} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}><span style={{ color: C.muted, fontSize: 11 }}>{lbl}</span><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 600 }}>{fmtPct(v)}</span></div>
+      ))}
+      <span style={{ color: C.muted, fontSize: 10.5 }}>· {fmtData(refTaxas.atualizado)}</span>
+      <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 11, textDecoration: 'underline', cursor: 'pointer' }}>editar</button>
+    </> : <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
+      {[['cdi', 'CDI'], ['selic', 'Selic'], ['ipca', 'IPCA 12m']].map(([k, lbl]) => (
+        <div key={k}><div style={{ color: C.muted, fontSize: 10 }}>{lbl}</div><input type="number" style={{ ...inputStyle, width: 90, padding: '4px 8px' }} value={draft[k]} onChange={e => setDraft(d => ({ ...d, [k]: e.target.value }))} /></div>
+      ))}
+      <button onClick={() => { onSaveManual({ ...draft, cdi: Number(draft.cdi), selic: Number(draft.selic), ipca: Number(draft.ipca), atualizado: todayStr(), fonte: 'manual' }); setEditing(false); }} style={{ background: C.lime, border: 'none', color: '#10160A', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Salvar</button>
+      <button onClick={() => { setDraft(refTaxas); setEditing(false); }} style={{ background: 'none', border: `1px solid ${C.hairline}`, color: C.muted, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
+    </div>}
+    {histLabel && <div style={{ width: '100%', color: C.muted, fontSize: 10.5 }}>{histLabel}</div>}
+  </div>;
+}
+
+/* ------------------------------------------------------------------ */
+/* App                                                                   */
+/* ------------------------------------------------------------------ */
+function App() {
+  const [loading, setLoading] = useState(true);
+  const [investments, setInvestments] = useState([]);
+  const [refTaxas, setRefTaxas] = useState(defaultRef);
+  const [taxaStatus, setTaxaStatus] = useState('manual');
+  const [historicoIndices, setHistoricoIndices] = useState({ cdi: [], selic: [], status: 'idle' });
+  const [tab, setTab] = useState('painel');
+  const [filtro, setFiltro] = useState('Ativas');
+  const [rankBy, setRankBy] = useState('rentLiquidaMensal');
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [formError, setFormError] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
+  const [historicoDraft, setHistoricoDraft] = useState({ data: todayStr(), valor: '' });
+  const [resgateDraft, setResgateDraft] = useState({ data: todayStr(), valor: '' });
+  const [resgatandoId, setResgatandoId] = useState(null);
+  const today = todayStr();
+
+  const refreshTaxas = useCallback(() => {
+    setTaxaStatus('carregando');
+    fetchTaxasBCB().then(data => {
+      const novo = { cdi: data.cdi.valor, selic: data.selic.valor, ipca: data.ipca.valor, atualizado: today, fonte: 'bcb' };
+      setRefTaxas(novo); setTaxaStatus('conectado'); storage.set('rf-taxas-referencia', JSON.stringify(novo));
+    }).catch(() => setTaxaStatus('offline'));
+  }, [today]);
+
+  useEffect(() => {
+    (async () => {
+      const r = await storage.get('rf-investimentos'); if (r) { try { setInvestments(JSON.parse(r.value)); } catch (e) {} }
+      const r2 = await storage.get('rf-taxas-referencia'); if (r2) { try { setRefTaxas(JSON.parse(r2.value)); } catch (e) {} }
+      setLoading(false); refreshTaxas();
+    })();
+    const interval = setInterval(refreshTaxas, 6 * 60 * 60 * 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line
+  }, []);
+
+  const minDataCDI = useMemo(() => { const d = investments.filter(i => i.indexador === 'CDI').map(i => i.dataAplicacao).sort(); return d.length ? d[0] : null; }, [investments]);
+  const minDataSelic = useMemo(() => { const d = investments.filter(i => i.indexador === 'SELIC').map(i => i.dataAplicacao).sort(); return d.length ? d[0] : null; }, [investments]);
+
+  useEffect(() => {
+    if (!minDataCDI && !minDataSelic) return;
+    let cancelado = false;
+    (async () => {
+      setHistoricoIndices(h => ({ ...h, status: 'carregando' }));
+      try {
+        const [cdi, selic] = await Promise.all([
+          minDataCDI ? fetchHistoricoDiario(12, minDataCDI, today) : Promise.resolve([]),
+          minDataSelic ? fetchHistoricoDiario(11, minDataSelic, today) : Promise.resolve([]),
+        ]);
+        if (!cancelado) setHistoricoIndices({ cdi, selic, status: 'ok' });
+      } catch (e) { if (!cancelado) setHistoricoIndices(h => ({ ...h, status: 'erro' })); }
+    })();
+    return () => { cancelado = true; };
+  }, [minDataCDI, minDataSelic, today]);
+
+  const refComHistorico = useMemo(() => ({ ...refTaxas, historicoCDI: historicoIndices.cdi, historicoSelic: historicoIndices.selic }), [refTaxas, historicoIndices]);
+
+  async function persist(list) { setInvestments(list); await storage.set('rf-investimentos', JSON.stringify(list)); }
+  async function persistRefManual(r) { setRefTaxas(r); setTaxaStatus('manual'); await storage.set('rf-taxas-referencia', JSON.stringify(r)); }
+
+  function openNew() { setForm(emptyForm); setEditingId(null); setFormError(''); setShowForm(true); }
+  function openEdit(inv) { setForm({ ...inv, valorAplicado: String(inv.valorAplicado), parametroValor: inv.parametroValor ?? '', aliquotaIRManual: inv.aliquotaIRManual ?? '', taxaOverrideAnual: inv.taxaOverrideAnual ?? '', carteira: inv.carteira || '' }); setEditingId(inv.id); setFormError(''); setShowForm(true); }
+  function handleTipoChange(tipo) { setForm(f => ({ ...f, tipo, isentoIR: TIPO_META[tipo].isentoDefault })); }
+
+  function handleSave() {
+    if (!form.instituicao.trim()) return setFormError('Informe a instituição / emissor.');
+    if (!form.dataAplicacao) return setFormError('Informe a data de aplicação.');
+    if (!form.dataVencimento) return setFormError('Informe a data de vencimento.');
+    if (form.dataVencimento <= form.dataAplicacao) return setFormError('O vencimento deve ser após a data de aplicação.');
+    const valor = Number(form.valorAplicado);
+    if (!valor || valor <= 0) return setFormError('Informe um valor aplicado válido.');
+    const campos = { instituicao: form.instituicao.trim(), tipo: form.tipo, indexador: form.indexador, parametroValor: form.parametroValor === '' ? 0 : Number(form.parametroValor), dataAplicacao: form.dataAplicacao, dataVencimento: form.dataVencimento, valorAplicado: valor, liquidez: form.liquidez, isentoIR: !!form.isentoIR, aliquotaIRManual: form.aliquotaIRManual === '' ? '' : Number(form.aliquotaIRManual), taxaOverrideAnual: form.taxaOverrideAnual === '' ? '' : Number(form.taxaOverrideAnual), carteira: form.carteira.trim(), observacoes: form.observacoes };
+    if (editingId) {
+      persist(investments.map(inv => inv.id === editingId ? { ...inv, ...campos, historico: (inv.historico && inv.historico.length) ? inv.historico.map(h => (h.data === inv.dataAplicacao && h.valorBruto === inv.valorAplicado) ? { ...h, data: campos.dataAplicacao, valorBruto: valor } : h) : [{ id: uid(), data: campos.dataAplicacao, valorBruto: valor }] } : inv));
+    } else {
+      persist([...investments, { id: uid(), ...campos, status: 'ativo', historico: [{ id: uid(), data: campos.dataAplicacao, valorBruto: valor }] }]);
+    }
+    setShowForm(false);
+  }
+  function deleteInvestment(id) { if (!window.confirm('Remover esta aplicação definitivamente? Essa ação não pode ser desfeita.')) return; persist(investments.filter(inv => inv.id !== id)); }
+  function addHistorico(invId) { const valor = Number(historicoDraft.valor); if (!valor || valor <= 0 || !historicoDraft.data) return; persist(investments.map(inv => inv.id !== invId ? inv : { ...inv, historico: [...(inv.historico || []).filter(h => h.data !== historicoDraft.data), { id: uid(), data: historicoDraft.data, valorBruto: valor }] })); setHistoricoDraft({ data: todayStr(), valor: '' }); }
+  function confirmResgate(invId) { const valor = Number(resgateDraft.valor); if (!valor || !resgateDraft.data) return; persist(investments.map(inv => inv.id === invId ? { ...inv, status: 'resgatado', dataResgate: resgateDraft.data, valorLiquidoRecebido: valor } : inv)); setResgatandoId(null); setResgateDraft({ data: todayStr(), valor: '' }); }
+  function reabrir(invId) { persist(investments.map(inv => inv.id === invId ? { ...inv, status: 'ativo', dataResgate: undefined, valorLiquidoRecebido: undefined } : inv)); }
+
+  const ativos = useMemo(() => investments.filter(i => i.status === 'ativo'), [investments]);
+  const resgatados = useMemo(() => investments.filter(i => i.status === 'resgatado'), [investments]);
+  const metricsById = useMemo(() => { const map = {}; investments.forEach(inv => { map[inv.id] = calcMetrics(inv, today, refComHistorico); }); return map; }, [investments, today, refComHistorico]);
+  const totais = useMemo(() => ativos.reduce((acc, inv) => { const m = metricsById[inv.id]; acc.aplicado += inv.valorAplicado; acc.bruto += m.valorAtualBruto; acc.liquido += m.valorAtualLiquido; acc.estimadoVenc += m.valorEstLiquidoVenc; return acc; }, { aplicado: 0, bruto: 0, liquido: 0, estimadoVenc: 0 }), [ativos, metricsById]);
+  const ganhoLiquido = totais.liquido - totais.aplicado;
+  const rentLiquida = totais.aplicado > 0 ? (ganhoLiquido / totais.aplicado) * 100 : 0;
+  const porTipo = useMemo(() => { const map = {}; ativos.forEach(inv => { map[inv.tipo] = (map[inv.tipo] || 0) + metricsById[inv.id].valorAtualBruto; }); return Object.entries(map).map(([tipo, valor]) => ({ name: tipo, value: valor, cor: TIPO_META[tipo]?.cor || C.muted })); }, [ativos, metricsById]);
+  const porIndexador = useMemo(() => { const map = {}; ativos.forEach(inv => { map[inv.indexador] = (map[inv.indexador] || 0) + metricsById[inv.id].valorAtualBruto; }); return Object.entries(map).map(([nome, valor]) => ({ name: nome, value: valor, cor: INDEXADOR_COR[nome] || C.muted })); }, [ativos, metricsById]);
+  const porInstituicao = useMemo(() => { const map = {}; ativos.forEach(inv => { map[inv.instituicao] = (map[inv.instituicao] || 0) + metricsById[inv.id].valorAtualBruto; }); return Object.entries(map).map(([nome, valor]) => ({ name: nome, valor })).sort((a, b) => b.valor - a.valor).slice(0, 8); }, [ativos, metricsById]);
+  const calendarioVencimentos = useMemo(() => { const meses = []; const base = new Date(); for (let i = 0; i < 12; i++) { const d = new Date(base.getFullYear(), base.getMonth() + i, 1); meses.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }), valor: 0 }); } ativos.forEach(inv => { const key = inv.dataVencimento.slice(0, 7); const alvo = meses.find(m => m.key === key); if (alvo) alvo.valor += metricsById[inv.id].valorAtualBruto; }); return meses; }, [ativos, metricsById]);
+  const evolucao = useMemo(() => buildEvolutionSeries(ativos, metricsById, today), [ativos, metricsById, today]);
+  const proximosVencimentos = useMemo(() => ativos.slice().sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)).slice(0, 6), [ativos]);
+  const listaFiltrada = useMemo(() => { let base = investments; if (filtro === 'Ativas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes >= 0); if (filtro === 'Vencidas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes < 0); if (filtro === 'Resgatadas') base = investments.filter(i => i.status === 'resgatado'); return base.slice().sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)); }, [investments, filtro, metricsById]);
+  const ranking = useMemo(() => { const list = ativos.slice(); const cmp = { rentLiquidaMensal: (a, b) => (metricsById[b.id].rentLiquidaMensal ?? -999) - (metricsById[a.id].rentLiquidaMensal ?? -999), rentLiquidaTotal: (a, b) => metricsById[b.id].rentLiquidaTotal - metricsById[a.id].rentLiquidaTotal, vencimento: (a, b) => a.dataVencimento.localeCompare(b.dataVencimento), valorAplicado: (a, b) => b.valorAplicado - a.valorAplicado }; return list.sort(cmp[rankBy]); }, [ativos, metricsById, rankBy]);
+
+  return <div style={{ background: C.bg, color: C.text, minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>
+    <header style={{ background: C.bg, position: 'sticky', top: 0, zIndex: 10 }} className="px-4">
+      <div style={{ maxWidth: 1152, margin: '0 auto', padding: '20px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 9, background: C.lime, color: '#10160A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14 }}>R</div>
+          <div><div style={{ fontWeight: 700, fontSize: 15 }}>Razão</div><div style={{ color: C.muted, fontSize: 10.5 }}>Controle de renda fixa</div></div>
+        </div>
+        <button onClick={openNew} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 10, padding: '10px 16px', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon name="plus" size={15} /> Nova aplicação</button>
+      </div>
+      <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTaxas} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length} />
+      <div style={{ maxWidth: 1152, margin: '0 auto', display: 'flex', gap: 4, padding: '0 16px 14px' }}>
+        {[['painel', 'Painel', 'grid'], ['ranking', 'Ranking', 'listOrdered'], ['lista', 'Aplicações', 'listChecks']].map(([t, lbl, ic]) => (
+          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? C.panel : 'transparent', border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 10, color: tab === t ? C.lime : C.muted, fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name={ic} size={14} /> {lbl}</button>
+        ))}
+      </div>
+    </header>
+
+    <main style={{ maxWidth: 1152, margin: '0 auto', padding: '24px 16px' }}>
+      {loading ? <div style={{ color: C.muted, padding: 40, textAlign: 'center' }}>Carregando seu livro-razão…</div>
+      : investments.length === 0 ? (
+        <div style={{ border: `1px dashed ${C.panel2}`, borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Icon name="wallet" size={26} color={C.lime} /></div>
+          <p style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Nenhuma aplicação registrada</p>
+          <p style={{ color: C.muted, fontSize: 13.5, marginBottom: 18 }}>Adicione a primeira para começar seu controle de renda fixa.</p>
+          <button onClick={openNew} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 13.5 }}>Adicionar aplicação</button>
+        </div>
+      ) : <>
+        <Hero liquido={totais.liquido} deltaPct={rentLiquida} ganho={ganhoLiquido} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 28 }}>
+          <StatCard label="Aplicado (bruto)" value={fmtBRL(totais.aplicado)} sub="capital investido" />
+          <StatCard label="Valor atual bruto" value={fmtBRL(totais.bruto)} sub="antes de IR/IOF" />
+          <StatCard label="Estimado líquido no vencimento" value={fmtBRL(totais.estimadoVenc)} accent={C.lime} sub="pelas taxas de referência atuais" />
+        </div>
+        {tab === 'painel' && <Dashboard porTipo={porTipo} porIndexador={porIndexador} porInstituicao={porInstituicao} calendarioVencimentos={calendarioVencimentos} evolucao={evolucao} proximosVencimentos={proximosVencimentos} metricsById={metricsById} resgatados={resgatados} ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} />}
+        {tab === 'ranking' && <RankingTab ranking={ranking} metricsById={metricsById} refTaxas={refComHistorico} rankBy={rankBy} setRankBy={setRankBy} />}
+        {tab === 'lista' && <ListaAplicacoes filtro={filtro} setFiltro={setFiltro} lista={listaFiltrada} metricsById={metricsById} refTaxas={refComHistorico} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir} />}
+      </>}
+    </main>
+    {showForm && <FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={refComHistorico} onClose={() => setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange} />}
+  </div>;
+}
+
+function Dashboard({ porTipo, porIndexador, porInstituicao, calendarioVencimentos, evolucao, proximosVencimentos, metricsById, resgatados, ativos, totais, ganhoLiquido }) {
+  const composicaoPie = [
+    { name: 'Aplicado (principal)', value: totais.aplicado, cor: C.blue },
+    { name: 'Rendimento líquido', value: Math.max(ganhoLiquido, 0), cor: C.lime },
+  ];
+  const composicaoTabela = ativos.slice().sort((a, b) => metricsById[b.id].valorAtualLiquido - metricsById[a.id].valorAtualLiquido);
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <Panel title="Aplicado x rendimento" subtitle="quanto do seu saldo atual é capital investido e quanto é rendimento acumulado">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+        <PieBlock data={composicaoPie} />
+        <div className="scrollbar-thin" style={{ overflowX: 'auto', maxHeight: 260, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
+            <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>
+              {['Título', 'Aplicado', 'Rendimento líq.', '% rendimento'].map(h => <th key={h} style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', whiteSpace: 'nowrap', fontWeight: 700 }}>{h}</th>)}
+            </tr></thead>
+            <tbody>{composicaoTabela.map(inv => { const m = metricsById[inv.id]; const rendimento = m.valorAtualLiquido - inv.valorAplicado; const pctRendimento = m.valorAtualLiquido > 0 ? (rendimento / m.valorAtualLiquido) * 100 : 0; return (
+              <tr key={inv.id} style={{ borderBottom: `1px solid ${C.hairline}` }}>
+                <td style={{ padding: '6px 8px', fontSize: 12 }}>{inv.instituicao}</td>
+                <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtBRL(inv.valorAplicado)}</td>
+                <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: rendimento >= 0 ? C.lime : C.red }}>{fmtBRL(rendimento)}</td>
+                <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtPct(pctRendimento)}</td>
+              </tr>
+            ); })}</tbody>
+          </table>
+        </div>
+      </div>
+    </Panel>
+    <Panel title="Evolução do patrimônio" subtitle="soma do valor bruto das aplicações ativas, com projeção diária pela taxa de referência">
+      <div style={{ width: '100%', height: 250 }}><ResponsiveContainer><LineChart data={evolucao}>
+        <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} />
+        <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} width={48} />
+        <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
+        <Line type="monotone" dataKey="total" stroke={C.lime} strokeWidth={2.5} dot={{ r: 3, fill: C.lime }} />
+      </LineChart></ResponsiveContainer></div>
+    </Panel>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+      <Panel title="Distribuição por tipo"><PieBlock data={porTipo} /></Panel>
+      <Panel title="Distribuição por indexador"><PieBlock data={porIndexador} /></Panel>
+    </div>
+    <Panel title="Concentração por instituição" subtitle="valor atual bruto por emissor">
+      <div style={{ width: '100%', height: Math.max(170, porInstituicao.length * 36) }}><ResponsiveContainer><BarChart data={porInstituicao} layout="vertical" margin={{ left: 8 }}>
+        <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" horizontal={false} />
+        <XAxis type="number" tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} />
+        <YAxis type="category" dataKey="name" tick={{ fill: C.text, fontSize: 11.5 }} axisLine={{ stroke: C.panel2 }} tickLine={false} width={116} />
+        <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
+        <Bar dataKey="valor" fill={C.blue} radius={[0, 6, 6, 0]} />
+      </BarChart></ResponsiveContainer></div>
+    </Panel>
+    <Panel title="Calendário de vencimentos" subtitle="valor bruto a vencer nos próximos 12 meses">
+      <div style={{ width: '100%', height: 210 }}><ResponsiveContainer><BarChart data={calendarioVencimentos}>
+        <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} />
+        <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} width={48} />
+        <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
+        <Bar dataKey="valor" fill={C.lime} radius={[6, 6, 0, 0]} />
+      </BarChart></ResponsiveContainer></div>
+    </Panel>
+    <Panel title="Próximos vencimentos">
+      {proximosVencimentos.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Nenhuma aplicação ativa.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {proximosVencimentos.map(inv => { const m = metricsById[inv.id]; return (
+          <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 10 }}>
+            <TipoTag tipo={inv.tipo} />
+            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 13.5 }}>{inv.instituicao}</div><div style={{ color: C.muted, fontSize: 11.5 }}>vence em {fmtData(inv.dataVencimento)} {m.diasRestantes >= 0 ? `(${m.diasRestantes} dias)` : '(vencida)'}</div></div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5 }}>{fmtBRL(m.valorAtualBruto)}</div>
+          </div>); })}
+      </div>}
+    </Panel>
+    {resgatados.length > 0 && <Panel title="Resgates realizados">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {resgatados.map(inv => { const ganho = inv.valorLiquidoRecebido - inv.valorAplicado; const rent = inv.valorAplicado > 0 ? (ganho / inv.valorAplicado) * 100 : 0; return (
+          <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 8 }}>
+            <span>{inv.instituicao} <span style={{ color: C.muted }}>· resgatado em {fmtData(inv.dataResgate)}</span></span>
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: ganho >= 0 ? C.lime : C.red }}>{fmtBRL(inv.valorLiquidoRecebido)} ({fmtPct(rent)})</span>
+          </div>); })}
+      </div>
+    </Panel>}
+  </div>;
+}
+
+function RankingTab({ ranking, metricsById, refTaxas, rankBy, setRankBy }) {
+  const opts = [['rentLiquidaMensal', 'Rentabilidade líquida mensal'], ['rentLiquidaTotal', 'Rentabilidade líquida total'], ['vencimento', 'Vencimento mais próximo'], ['valorAplicado', 'Maior valor aplicado']];
+  return <Panel title="Classificação: do melhor para o pior" subtitle="aplicações ativas ordenadas pelo critério escolhido" right={<select style={{ ...inputStyle, width: 230 }} value={rankBy} onChange={e => setRankBy(e.target.value)}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>}>
+    {ranking.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Nenhuma aplicação ativa para classificar.</p> : (
+      <div className="scrollbar-thin" style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+        <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>{['#', 'Título', 'Taxa contratada', 'Rent. bruta/mês', 'Rent. líquida/mês', '% do CDI', 'Valor atual líquido', 'Vencimento'].map(h => <th key={h} style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '8px 10px', whiteSpace: 'nowrap', fontWeight: 700 }}>{h}</th>)}</tr></thead>
+        <tbody>{ranking.map((inv, i) => { const m = metricsById[inv.id]; const melhor = i === 0, pior = i === ranking.length - 1 && ranking.length > 1; return (
+          <tr key={inv.id} style={{ borderBottom: `1px solid ${C.hairline}`, background: melhor ? C.lime + '10' : pior ? C.red + '10' : 'transparent' }}>
+            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", color: melhor ? C.lime : pior ? C.red : C.muted, fontWeight: 700, fontSize: 13 }}>{i + 1}{melhor && <span style={{ marginLeft: 4, display: 'inline-flex', verticalAlign: '-2px' }}><Icon name="trophy" size={11} /></span>}</td>
+            <td style={{ padding: 10 }}><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TipoTag tipo={inv.tipo} /><span style={{ fontWeight: 600, fontSize: 13 }}>{inv.instituicao}</span></div></td>
+            <td style={{ padding: 10, fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap' }}>{descricaoTaxa(inv, refTaxas)}</td>
+            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtPct(m.rentBrutaMensal)}</td>
+            <td style={{ padding: 10 }}><Delta value={m.rentLiquidaMensal} size={12.5} /></td>
+            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: m.pctCDILiquido !== null && m.pctCDILiquido >= 100 ? C.lime : C.text }}>{m.pctCDILiquido !== null ? fmtPct(m.pctCDILiquido) : '—'}</td>
+            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtBRL(m.valorAtualLiquido)}</td>
+            <td style={{ padding: 10, fontSize: 11.5, whiteSpace: 'nowrap' }}>{fmtData(inv.dataVencimento)}</td>
+          </tr>); })}</tbody>
+      </table></div>
+    )}
+  </Panel>;
+}
+
+function exportarCSV(lista, metricsById, refTaxas) {
+  const header = ['Instituição', 'Tipo', 'Indexador', 'Taxa contratada', 'Carteira', 'Data aplicação', 'Data vencimento', 'Valor aplicado', 'Valor atual bruto', 'Valor atual líquido', 'Rent. líquida mensal %', 'Rent. líquida total %', '% do CDI líquido', 'Status'];
+  const linhas = lista.map(inv => { const m = metricsById[inv.id]; return [inv.instituicao, inv.tipo, inv.indexador, descricaoTaxa(inv, refTaxas), inv.carteira || '', fmtData(inv.dataAplicacao), fmtData(inv.dataVencimento), inv.valorAplicado.toFixed(2), m.valorAtualBruto.toFixed(2), m.valorAtualLiquido.toFixed(2), m.rentLiquidaMensal !== null ? m.rentLiquidaMensal.toFixed(2) : '', m.rentLiquidaTotal.toFixed(2), m.pctCDILiquido !== null ? m.pctCDILiquido.toFixed(1) : '', inv.status].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'); });
+  const csv = '\uFEFF' + [header.join(';'), ...linhas].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `razao-aplicacoes-${todayStr()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expandedId, setExpandedId, openEdit, deleteInvestment, historicoDraft, setHistoricoDraft, addHistorico, resgatandoId, setResgatandoId, resgateDraft, setResgateDraft, confirmResgate, reabrir }) {
+  return <div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{['Ativas', 'Vencidas', 'Resgatadas', 'Todas'].map(f => <button key={f} onClick={() => setFiltro(f)} style={{ background: filtro === f ? C.lime : C.panel, color: filtro === f ? '#10160A' : C.muted, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{f}</button>)}</div>
+      {lista.length > 0 && <button onClick={() => exportarCSV(lista, metricsById, refTaxas)} style={{ background: C.panel, color: C.mutedLight, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Exportar CSV</button>}
+    </div>
+    {lista.length === 0 ? <p style={{ color: C.muted, fontSize: 14 }}>Nenhuma aplicação nesse filtro.</p> : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{lista.map(inv => {
+        const m = metricsById[inv.id]; const vencida = inv.status === 'ativo' && m.diasRestantes < 0; const expanded = expandedId === inv.id;
+        const hist = (inv.historico || []).slice().sort((a, b) => b.data.localeCompare(a.data));
+        return <div key={inv.id} style={{ background: C.panel, borderRadius: 16, padding: 16, boxShadow: shadow, borderTop: `1px solid ${vencida ? C.red + '55' : C.hairline}` }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <TipoTag tipo={inv.tipo} /><span style={{ fontWeight: 700, fontSize: 14.5 }}>{inv.instituicao}</span>
+                {inv.status === 'resgatado' && <Badge cor={C.slate} texto="Resgatado" />}
+                {vencida && <Badge cor={C.red} texto="Vencida" icon={<Icon name="alert" size={11} />} />}
+                {inv.isentoIR && <Badge cor={C.lime} texto="Isento IR" />}
+                {inv.carteira && <Badge cor={C.blue} texto={inv.carteira} />}
+              </div>
+              <div style={{ color: C.muted, fontSize: 11.5, marginTop: 5 }}>{descricaoTaxa(inv, refTaxas)} · aplicado em {fmtData(inv.dataAplicacao)} · vence em {fmtData(inv.dataVencimento)} · {inv.liquidez}</div>
+              <div style={{ marginTop: 10, maxWidth: 340 }}><MaturityBar diasCorridos={m.diasCorridos} diasTotais={m.diasTotais} vencida={vencida} /><div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{inv.status === 'ativo' ? (m.diasRestantes >= 0 ? `${m.diasRestantes} dias até o vencimento` : `vencida há ${Math.abs(m.diasRestantes)} dias`) : `resgatado em ${fmtData(inv.dataResgate)}`}</div></div>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <IconBtn onClick={() => openEdit(inv)} title="Editar"><Icon name="pencil" size={14} /></IconBtn>
+              <IconBtn onClick={() => setExpandedId(expanded ? null : inv.id)} title="Detalhes"><Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={14} /></IconBtn>
+              <IconBtn onClick={() => deleteInvestment(inv.id)} title="Excluir" danger><Icon name="trash" size={14} /></IconBtn>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 16 }}>
+            <Mini label="Aplicado (bruto)" value={fmtBRL(inv.valorAplicado)} />
+            <Mini label={m.projetado ? 'Atual (bruto) · projetado' : 'Atual (bruto)'} value={fmtBRL(m.valorAtualBruto)} />
+            <Mini label={m.projetado ? 'Atual (líquido) · projetado' : 'Atual (líquido)'} value={fmtBRL(m.valorAtualLiquido)} accent={C.lime} />
+            <Mini label="Estimado líquido no venc." value={fmtBRL(m.valorEstLiquidoVenc)} accent={C.blue} />
+          </div>
+          {m.projetado && <div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{m.precisao === 'historico' ? `composto dia a dia com o histórico real do CDI/Selic desde ${fmtData(m.ancoraData)}` : `projetado a partir de ${fmtData(m.ancoraData)} pela taxa efetiva atual (${fmtPct(m.taxaAnual)} a.a.) — lance um valor real do extrato quando quiser corrigir`}</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 12 }}>
+            <Mini label="Rent. bruta / mês" value={fmtPct(m.rentBrutaMensal)} />
+            <div><div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Rent. líquida / mês</div><Delta value={m.rentLiquidaMensal} size={13.5} /></div>
+            <Mini label="Rent. líquida total" value={fmtPct(m.rentLiquidaTotal)} />
+            <Mini label="% do CDI (líquido)" value={m.pctCDILiquido !== null ? fmtPct(m.pctCDILiquido) : '—'} accent={m.pctCDILiquido !== null && m.pctCDILiquido >= 100 ? C.lime : C.text} />
+          </div>
+          {expanded && <div style={{ marginTop: 16, borderTop: `1px solid ${C.hairline}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
+              <Mini label="Dias corridos" value={m.diasCorridos} />
+              <Mini label="Alíquota IR atual" value={inv.isentoIR ? 'Isento' : fmtPct(m.aliqIR)} />
+              <Mini label="IOF (se resgate hoje)" value={m.iofAliq > 0 ? fmtPct(m.iofAliq) : '—'} />
+              <Mini label="Ganho bruto até hoje" value={fmtBRL(m.ganhoBruto)} accent={m.ganhoBruto >= 0 ? C.lime : C.red} />
+              <Mini label="Ganho estimado no venc." value={fmtBRL(m.ganhoEstVenc)} accent={m.ganhoEstVenc >= 0 ? C.lime : C.red} />
+              <Mini label="Rent. bruta total" value={fmtPct(m.rentBrutaTotal)} />
+            </div>
+            {inv.observacoes && <div><SectionLabel>Observações</SectionLabel><p style={{ fontSize: 13 }}>{inv.observacoes}</p></div>}
+            <div>
+              <SectionLabel>Evolução mensal (valor bruto)</SectionLabel>
+              <div style={{ width: '100%', height: 160 }}><ResponsiveContainer><LineChart data={buildMonthlySeriesForInv(inv, refTaxas, todayStr())}>
+                <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 10 }} axisLine={{ stroke: C.panel2 }} tickLine={false} />
+                <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(1) + 'k'} width={44} />
+                <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
+                <Line type="monotone" dataKey="bruto" stroke={C.lime} strokeWidth={2} dot={{ r: 2.5, fill: C.lime }} />
+              </LineChart></ResponsiveContainer></div>
+              <div style={{ color: C.muted, fontSize: 10.5, marginTop: 2 }}>fim de cada mês — projetado pela taxa efetiva atual entre os lançamentos reais que você fez</div>
+            </div>
+            <div>
+              <SectionLabel icon={<Icon name="history" size={12} />}>Histórico de valores</SectionLabel>
+              <div className="scrollbar-thin" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, maxHeight: 140, overflowY: 'auto' }}>{hist.map(h => <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.muted, padding: '3px 0' }}><span>{fmtData(h.data)}</span><span style={{ fontFamily: "'IBM Plex Mono', monospace", color: C.text }}>{fmtBRL(h.valorBruto)}</span></div>)}</div>
+              {inv.status === 'ativo' && <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div><span style={{ color: C.muted, fontSize: 11 }}>Data</span><input type="date" style={{ ...inputStyle, width: 150 }} value={historicoDraft.data} onChange={e => setHistoricoDraft(d => ({ ...d, data: e.target.value }))} /></div>
+                <div><span style={{ color: C.muted, fontSize: 11 }}>Valor bruto atual</span><input type="number" placeholder="0,00" style={{ ...inputStyle, width: 140 }} value={historicoDraft.valor} onChange={e => setHistoricoDraft(d => ({ ...d, valor: e.target.value }))} /></div>
+                <button onClick={() => addHistorico(inv.id)} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Registrar</button>
+              </div>}
+            </div>
+            {inv.status === 'ativo' ? (resgatandoId === inv.id ? (
+              <div><SectionLabel>Registrar resgate</SectionLabel><div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div><span style={{ color: C.muted, fontSize: 11 }}>Data do resgate</span><input type="date" style={{ ...inputStyle, width: 150 }} value={resgateDraft.data} onChange={e => setResgateDraft(d => ({ ...d, data: e.target.value }))} /></div>
+                <div><span style={{ color: C.muted, fontSize: 11 }}>Valor líquido recebido</span><input type="number" placeholder="0,00" style={{ ...inputStyle, width: 150 }} value={resgateDraft.valor} onChange={e => setResgateDraft(d => ({ ...d, valor: e.target.value }))} /></div>
+                <button onClick={() => confirmResgate(inv.id)} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Confirmar</button>
+                <button onClick={() => setResgatandoId(null)} style={{ background: 'none', color: C.muted, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '9px 14px', fontSize: 12.5, cursor: 'pointer' }}>Cancelar</button>
+              </div></div>
+            ) : <button onClick={() => { setResgatandoId(inv.id); setResgateDraft({ data: todayStr(), valor: Math.round(m.valorAtualLiquido * 100) / 100 }); }} style={{ alignSelf: 'flex-start', background: C.panel2, color: C.lime, border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="check" size={14} /> Registrar resgate</button>
+            ) : <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 13, color: C.muted }}>Recebido líquido: <b style={{ color: C.text }}>{fmtBRL(inv.valorLiquidoRecebido)}</b></span><button onClick={() => reabrir(inv.id)} style={{ background: 'none', color: C.muted, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>Reabrir</button></div>}
+          </div>}
+        </div>;
+      })}</div>
+    )}
+  </div>;
+}
+
+function FormModal({ form, setForm, editingId, formError, refTaxas, onClose, onSave, onTipoChange }) {
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const efetiva = taxaAnualEfetiva({ ...form, parametroValor: form.parametroValor }, refTaxas);
+  return <div style={{ position: 'fixed', inset: 0, background: '#000000C0', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto', zIndex: 50 }}>
+    <div style={{ background: C.panel, borderRadius: 18, width: '100%', maxWidth: 620, padding: 24, boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{editingId ? 'Editar aplicação' : 'Nova aplicação'}</h2>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><Icon name="x" size={19} /></button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
+        <Field label="Instituição / emissor"><input style={inputStyle} placeholder="Ex: Banco XP, Rico, Itaú…" value={form.instituicao} onChange={set('instituicao')} /></Field>
+        <Field label="Tipo"><select style={inputStyle} value={form.tipo} onChange={e => onTipoChange(e.target.value)}>{TIPOS.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
+        <Field label="Indexador"><select style={inputStyle} value={form.indexador} onChange={set('indexador')}>{INDEXADORES.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
+        <Field label={parametroLabel(form.indexador)} hint={`taxa efetiva calculada: ${fmtPct(efetiva)} a.a.`}><input type="number" style={inputStyle} placeholder="Ex: 110" value={form.parametroValor} onChange={set('parametroValor')} /></Field>
+        <Field label="Data de aplicação"><input type="date" style={inputStyle} value={form.dataAplicacao} onChange={set('dataAplicacao')} /></Field>
+        <Field label="Data de vencimento"><input type="date" style={inputStyle} value={form.dataVencimento} onChange={set('dataVencimento')} /></Field>
+        <Field label="Valor aplicado (bruto)"><input type="number" style={inputStyle} placeholder="0,00" value={form.valorAplicado} onChange={set('valorAplicado')} /></Field>
+        <Field label="Liquidez"><select style={inputStyle} value={form.liquidez} onChange={set('liquidez')}>{LIQUIDEZ_OPTS.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
+        <Field label="Alíquota de IR manual (%)" hint="deixe vazio para usar a tabela regressiva automática"><input type="number" style={inputStyle} placeholder="automático" value={form.aliquotaIRManual} onChange={set('aliquotaIRManual')} /></Field>
+        <Field label="Override da taxa projetada (% a.a.)" hint="opcional"><input type="number" style={inputStyle} placeholder="deixe vazio" value={form.taxaOverrideAnual} onChange={set('taxaOverrideAnual')} /></Field>
+        <Field label="Carteira / objetivo" hint="opcional"><input style={inputStyle} placeholder="Ex: Reserva de emergência" value={form.carteira} onChange={set('carteira')} /></Field>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', marginTop: 4 }}><input type="checkbox" checked={form.isentoIR} onChange={e => setForm(f => ({ ...f, isentoIR: e.target.checked }))} /><span style={{ fontSize: 13 }}>Isento de Imposto de Renda (padrão para LCI/LCA/CRI/CRA)</span></label>
+        <div style={{ gridColumn: '1 / -1' }}><Field label="Observações"><textarea style={{ ...inputStyle, minHeight: 68, resize: 'vertical' }} placeholder="Notas livres…" value={form.observacoes} onChange={set('observacoes')} /></Field></div>
+      </div>
+      {formError && <p style={{ color: C.red, fontSize: 13, marginTop: 12 }}>{formError}</p>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
+        <button onClick={onClose} style={{ background: 'none', border: `1px solid ${C.hairline}`, color: C.muted, borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontSize: 13.5 }}>Cancelar</button>
+        <button onClick={onSave} style={{ background: C.lime, border: 'none', color: '#10160A', borderRadius: 10, padding: '10px 18px', cursor: 'pointer', fontWeight: 700, fontSize: 13.5 }}>{editingId ? 'Salvar alterações' : 'Adicionar aplicação'}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
