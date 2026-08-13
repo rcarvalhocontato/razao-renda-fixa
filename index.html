@@ -23,17 +23,24 @@
 </style>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
+<script>
+  setTimeout(function () {
+    var root = document.getElementById('root');
+    if (root && root.children.length === 0) {
+      root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0A0D12;font-family:sans-serif;padding:24px;">' +
+        '<div style="max-width:420px;text-align:center;color:#EDEFF3;">' +
+        '<p style="font-size:16px;font-weight:700;margin-bottom:8px;">O app não conseguiu carregar</p>' +
+        '<p style="font-size:13px;color:#98A2AF;line-height:1.5;">Isso costuma acontecer quando o navegador bloqueou scripts externos (React/Babel) — por bloqueador de anúncios/scripts, modo offline, ou rede restrita (ex: wi-fi corporativo). Verifique sua conexão, desative bloqueadores para esta página e recarregue.</p>' +
+        '</div></div>';
+    }
+  }, 7000);
+</script>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useMemo, useCallback } = React;
-const {
-  PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, ResponsiveContainer, LineChart, Line
-} = Recharts;
 
 /* ------------------------------------------------------------------ */
 /* Armazenamento local (substitui o window.storage do ambiente Claude) */
@@ -244,6 +251,56 @@ function buildMonthlySeriesForInv(inv, ref, today) {
   pontos.push({ label: 'hoje', bruto: valorProjetadoEm(inv, today, ref, today) });
   return pontos;
 }
+
+const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+function buildRentabilidadeMensalMatrix(ativos, ref, today) {
+  if (!ativos.length) return { anos: [], dados: {} };
+  const inicioMaisAntigo = ativos.map(i => i.dataAplicacao).sort()[0];
+  const start = new Date(inicioMaisAntigo + 'T00:00:00');
+  const hoje = new Date(today + 'T00:00:00');
+  const anos = {};
+  let y = start.getFullYear(), m = start.getMonth();
+  while (true) {
+    const inicioMes = new Date(y, m, 1);
+    const fimMes = new Date(y, m + 1, 0);
+    if (inicioMes > hoje) break;
+    const fimEfetivo = fimMes > hoje ? hoje : fimMes;
+    const inicioStr = inicioMes.toISOString().slice(0, 10);
+    const fimStr = fimEfetivo.toISOString().slice(0, 10);
+    let somaPeso = 0, somaPesoRetorno = 0;
+    ativos.forEach(inv => {
+      if (inv.dataAplicacao > fimStr) return;
+      const inicioCalc = inv.dataAplicacao > inicioStr ? inv.dataAplicacao : inicioStr;
+      const valorInicio = valorProjetadoEm(inv, inicioCalc, ref, today);
+      const valorFim = valorProjetadoEm(inv, fimStr, ref, today);
+      if (valorInicio > 0) { somaPeso += valorInicio; somaPesoRetorno += valorInicio * (valorFim / valorInicio - 1); }
+    });
+    const retornoCarteira = somaPeso > 0 ? (somaPesoRetorno / somaPeso) * 100 : null;
+    const retornoCDI = ref.historicoCDI && ref.historicoCDI.length ? (fatorAcumulado(ref.historicoCDI, inicioStr, fimStr) - 1) * 100 : null;
+    if (!anos[y]) anos[y] = { carteira: Array(12).fill(null), cdi: Array(12).fill(null) };
+    anos[y].carteira[m] = retornoCarteira;
+    anos[y].cdi[m] = retornoCDI;
+    m++; if (m > 11) { m = 0; y++; }
+  }
+  const anosOrdenados = Object.keys(anos).map(Number).sort((a, b) => b - a);
+  return { anos: anosOrdenados, dados: anos };
+}
+function buildAlocacaoInstituicao(ativos, metricsById) {
+  const map = {};
+  ativos.forEach(inv => {
+    const m = metricsById[inv.id];
+    if (!map[inv.instituicao]) map[inv.instituicao] = { total: 0, aplicado: 0, ganho: 0 };
+    map[inv.instituicao].total += m.valorAtualLiquido;
+    map[inv.instituicao].aplicado += inv.valorAplicado;
+    map[inv.instituicao].ganho += (m.valorAtualLiquido - inv.valorAplicado);
+  });
+  const totalGeral = Object.values(map).reduce((a, b) => a + b.total, 0) || 1;
+  return Object.entries(map).map(([nome, v]) => ({
+    nome, total: v.total, pctCarteira: (v.total / totalGeral) * 100,
+    rentLiquida: v.aplicado > 0 ? (v.ganho / v.aplicado) * 100 : 0,
+  })).sort((a, b) => b.total - a.total);
+}
 async function fetchTaxasBCB() {
   const series = { selic: 432, cdi: 4391, ipca: 13522 };
   const entries = await Promise.all(Object.entries(series).map(async ([chave, codigo]) => {
@@ -299,12 +356,64 @@ function Panel({ title, subtitle, children, right }) {
   </section>;
 }
 function PieBlock({ data }) {
-  if (!data.length) return <p style={{ color: C.muted, fontSize: 13 }}>Sem dados.</p>;
-  return <div style={{ width: '100%', height: 230 }}><ResponsiveContainer><PieChart>
-    <Pie data={data} dataKey="value" nameKey="name" innerRadius={54} outerRadius={82} paddingAngle={3}>{data.map((d, i) => <Cell key={i} fill={d.cor} stroke={C.panel} strokeWidth={3} />)}</Pie>
-    <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
-    <Legend wrapperStyle={{ fontSize: 11.5, color: C.muted }} />
-  </PieChart></ResponsiveContainer></div>;
+  const vals = data.filter(d => d.value > 0);
+  if (!vals.length) return <p style={{ color: C.muted, fontSize: 13 }}>Sem dados.</p>;
+  const total = vals.reduce((a, b) => a + b.value, 0) || 1;
+  let acc = 0;
+  const stops = vals.map(d => { const s = (acc / total) * 100; acc += d.value; const e = (acc / total) * 100; return `${d.cor} ${s}% ${e}%`; }).join(', ');
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+    <div style={{ width: 150, height: 150, borderRadius: '50%', background: `conic-gradient(${stops})`, position: 'relative', flexShrink: 0 }}>
+      <div style={{ position: 'absolute', inset: 26, borderRadius: '50%', background: C.panel }} />
+    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {vals.map((d, i) => <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+        <span style={{ width: 10, height: 10, borderRadius: 3, background: d.cor, flexShrink: 0 }} />
+        <span style={{ color: C.muted }}>{d.name}</span>
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", marginLeft: 16, color: C.text }}>{fmtBRL(d.value)}</span>
+      </div>)}
+    </div>
+  </div>;
+}
+function MiniLineChart({ data, valueKey, labelKey, height = 220, color }) {
+  if (!data || data.length < 2) return <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 13 }}>Dados insuficientes ainda.</div>;
+  const values = data.map(d => d[valueKey]);
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = (max - min) || 1;
+  const W = 600, H = 200, pad = 6;
+  const pts = data.map((d, i) => { const x = pad + (i / (data.length - 1)) * (W - pad * 2); const y = pad + (1 - (d[valueKey] - min) / range) * (H - pad * 2); return [x, y]; });
+  const path = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const areaPath = path + ` L${pts[pts.length - 1][0].toFixed(1)},${H - pad} L${pts[0][0].toFixed(1)},${H - pad} Z`;
+  return <div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', color: C.muted, fontSize: 10.5, marginBottom: 2 }}>
+      <span>{fmtBRL(max)}</span><span style={{ fontFamily: "'IBM Plex Mono', monospace", color: C.text }}>{fmtBRL(values[values.length - 1])}</span>
+    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height, display: 'block' }} preserveAspectRatio="none">
+      <path d={areaPath} fill={color + '22'} stroke="none" />
+      <path d={path} fill="none" stroke={color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+    <div style={{ display: 'flex', justifyContent: 'space-between', color: C.muted, fontSize: 10.5, marginTop: 2 }}>
+      <span>{data[0][labelKey]}</span><span>{data[data.length - 1][labelKey]}</span>
+    </div>
+  </div>;
+}
+function SimpleBarsVertical({ data, labelKey, valueKey, color }) {
+  const max = Math.max(...data.map(d => d[valueKey]), 1);
+  return <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 190 }}>
+    {data.map((d, i) => <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 0 }}>
+      <span style={{ fontSize: 9, color: C.muted, fontFamily: "'IBM Plex Mono', monospace" }}>{d[valueKey] > 0 ? (d[valueKey] / 1000).toFixed(0) + 'k' : ''}</span>
+      <div style={{ width: '100%', maxWidth: 30, height: Math.max((d[valueKey] / max) * 140, d[valueKey] > 0 ? 3 : 0), background: color, borderRadius: '4px 4px 0 0' }} title={fmtBRL(d[valueKey])} />
+      <span style={{ fontSize: 9.5, color: C.muted, whiteSpace: 'nowrap' }}>{d[labelKey]}</span>
+    </div>)}
+  </div>;
+}
+function SimpleBarsHorizontal({ data, labelKey, valueKey, color }) {
+  const max = Math.max(...data.map(d => d[valueKey]), 1);
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    {data.map((d, i) => <div key={i}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: C.text, marginBottom: 3 }}><span>{d[labelKey]}</span><span style={{ fontFamily: "'IBM Plex Mono', monospace", color: C.muted }}>{fmtBRL(d[valueKey])}</span></div>
+      <div style={{ height: 8, background: C.panel2, borderRadius: 4, overflow: 'hidden' }}><div style={{ height: '100%', width: `${Math.max((d[valueKey] / max) * 100, 2)}%`, background: color, borderRadius: 4 }} /></div>
+    </div>)}
+  </div>;
 }
 function Hero({ liquido, deltaPct, ganho }) {
   return <div style={{ background: `linear-gradient(155deg, ${C.panel}, ${C.bg})`, borderRadius: 20, padding: 26, marginBottom: 20, boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
@@ -490,7 +599,7 @@ function App() {
           <StatCard label="Valor atual bruto" value={fmtBRL(totais.bruto)} sub="antes de IR/IOF" />
           <StatCard label="Estimado líquido no vencimento" value={fmtBRL(totais.estimadoVenc)} accent={C.lime} sub="pelas taxas de referência atuais" />
         </div>
-        {tab === 'painel' && <Dashboard porTipo={porTipo} porIndexador={porIndexador} porInstituicao={porInstituicao} calendarioVencimentos={calendarioVencimentos} evolucao={evolucao} proximosVencimentos={proximosVencimentos} metricsById={metricsById} resgatados={resgatados} ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} />}
+        {tab === 'painel' && <Dashboard porTipo={porTipo} porIndexador={porIndexador} porInstituicao={porInstituicao} calendarioVencimentos={calendarioVencimentos} evolucao={evolucao} proximosVencimentos={proximosVencimentos} metricsById={metricsById} resgatados={resgatados} ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} refTaxas={refComHistorico} today={today} />}
         {tab === 'ranking' && <RankingTab ranking={ranking} metricsById={metricsById} refTaxas={refComHistorico} rankBy={rankBy} setRankBy={setRankBy} />}
         {tab === 'lista' && <ListaAplicacoes filtro={filtro} setFiltro={setFiltro} lista={listaFiltrada} metricsById={metricsById} refTaxas={refComHistorico} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir} />}
       </>}
@@ -499,13 +608,56 @@ function App() {
   </div>;
 }
 
-function Dashboard({ porTipo, porIndexador, porInstituicao, calendarioVencimentos, evolucao, proximosVencimentos, metricsById, resgatados, ativos, totais, ganhoLiquido }) {
+function Dashboard({ porTipo, porIndexador, porInstituicao, calendarioVencimentos, evolucao, proximosVencimentos, metricsById, resgatados, ativos, totais, ganhoLiquido, refTaxas, today }) {
   const composicaoPie = [
     { name: 'Aplicado (principal)', value: totais.aplicado, cor: C.blue },
     { name: 'Rendimento líquido', value: Math.max(ganhoLiquido, 0), cor: C.lime },
   ];
   const composicaoTabela = ativos.slice().sort((a, b) => metricsById[b.id].valorAtualLiquido - metricsById[a.id].valorAtualLiquido);
+  const matrizMensal = useMemo(() => buildRentabilidadeMensalMatrix(ativos, refTaxas, today), [ativos, refTaxas, today]);
+  const alocacaoInstituicao = useMemo(() => buildAlocacaoInstituicao(ativos, metricsById), [ativos, metricsById]);
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <Panel title="Rentabilidade mensal e acumulada" subtitle="retorno líquido da carteira mês a mês, comparado ao CDI do mesmo período — ponderado pelo valor de cada título, sem distorção por aportes">
+      {matrizMensal.anos.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sem dados suficientes ainda.</p> : (
+        <div className="scrollbar-thin" style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
+          <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>
+            <th style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', fontWeight: 700 }}></th>
+            {MESES_ABREV.map(mm => <th key={mm} style={{ textAlign: 'right', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', fontWeight: 700 }}>{mm}</th>)}
+            <th style={{ textAlign: 'right', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', fontWeight: 700 }}>Ano</th>
+          </tr></thead>
+          <tbody>{matrizMensal.anos.map(ano => {
+            const carteira = matrizMensal.dados[ano].carteira, cdi = matrizMensal.dados[ano].cdi;
+            const acumCarteira = (carteira.filter(v => v !== null).reduce((f, v) => f * (1 + v / 100), 1) - 1) * 100;
+            const acumCDI = (cdi.filter(v => v !== null).reduce((f, v) => f * (1 + v / 100), 1) - 1) * 100;
+            return <React.Fragment key={ano}>
+              <tr style={{ borderTop: `1px solid ${C.hairline}` }}>
+                <td style={{ padding: '5px 8px', fontSize: 12, fontWeight: 700 }}>{ano}</td>
+                {carteira.map((v, i) => <td key={i} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: v === null ? C.hairline : v >= 0 ? C.lime : C.red }}>{v === null ? '—' : fmtPct(v)}</td>)}
+                <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, fontWeight: 700, color: acumCarteira >= 0 ? C.lime : C.red }}>{fmtPct(acumCarteira)}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '2px 8px 10px', fontSize: 10.5, color: C.muted }}>CDI</td>
+                {cdi.map((v, i) => <td key={i} style={{ padding: '2px 8px 10px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: C.muted }}>{v === null ? '—' : fmtPct(v)}</td>)}
+                <td style={{ padding: '2px 8px 10px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: C.muted }}>{fmtPct(acumCDI)}</td>
+              </tr>
+            </React.Fragment>;
+          })}</tbody>
+        </table></div>
+      )}
+    </Panel>
+    <Panel title="Alocação por instituição" subtitle="total, participação na carteira e rentabilidade líquida acumulada por emissor">
+      <div className="scrollbar-thin" style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+        <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>{['Instituição', 'Total líquido', '% carteira', 'Rent. líquida'].map(h => <th key={h} style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', whiteSpace: 'nowrap', fontWeight: 700 }}>{h}</th>)}</tr></thead>
+        <tbody>{alocacaoInstituicao.map(a => (
+          <tr key={a.nome} style={{ borderBottom: `1px solid ${C.hairline}` }}>
+            <td style={{ padding: '7px 8px', fontSize: 12.5, fontWeight: 600 }}>{a.nome}</td>
+            <td style={{ padding: '7px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtBRL(a.total)}</td>
+            <td style={{ padding: '7px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtPct(a.pctCarteira)}</td>
+            <td style={{ padding: '7px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: a.rentLiquida >= 0 ? C.lime : C.red }}>{fmtPct(a.rentLiquida)}</td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+    </Panel>
     <Panel title="Aplicado x rendimento" subtitle="quanto do seu saldo atual é capital investido e quanto é rendimento acumulado">
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
         <PieBlock data={composicaoPie} />
@@ -527,35 +679,17 @@ function Dashboard({ porTipo, porIndexador, porInstituicao, calendarioVencimento
       </div>
     </Panel>
     <Panel title="Evolução do patrimônio" subtitle="soma do valor bruto das aplicações ativas, com projeção diária pela taxa de referência">
-      <div style={{ width: '100%', height: 250 }}><ResponsiveContainer><LineChart data={evolucao}>
-        <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} />
-        <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} width={48} />
-        <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
-        <Line type="monotone" dataKey="total" stroke={C.lime} strokeWidth={2.5} dot={{ r: 3, fill: C.lime }} />
-      </LineChart></ResponsiveContainer></div>
+      <MiniLineChart data={evolucao} valueKey="total" labelKey="date" color={C.lime} />
     </Panel>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
       <Panel title="Distribuição por tipo"><PieBlock data={porTipo} /></Panel>
       <Panel title="Distribuição por indexador"><PieBlock data={porIndexador} /></Panel>
     </div>
     <Panel title="Concentração por instituição" subtitle="valor atual bruto por emissor">
-      <div style={{ width: '100%', height: Math.max(170, porInstituicao.length * 36) }}><ResponsiveContainer><BarChart data={porInstituicao} layout="vertical" margin={{ left: 8 }}>
-        <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} />
-        <YAxis type="category" dataKey="name" tick={{ fill: C.text, fontSize: 11.5 }} axisLine={{ stroke: C.panel2 }} tickLine={false} width={116} />
-        <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
-        <Bar dataKey="valor" fill={C.blue} radius={[0, 6, 6, 0]} />
-      </BarChart></ResponsiveContainer></div>
+      <SimpleBarsHorizontal data={porInstituicao} labelKey="name" valueKey="valor" color={C.blue} />
     </Panel>
     <Panel title="Calendário de vencimentos" subtitle="valor bruto a vencer nos próximos 12 meses">
-      <div style={{ width: '100%', height: 210 }}><ResponsiveContainer><BarChart data={calendarioVencimentos}>
-        <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} />
-        <YAxis tick={{ fill: C.muted, fontSize: 11 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(0) + 'k'} width={48} />
-        <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
-        <Bar dataKey="valor" fill={C.lime} radius={[6, 6, 0, 0]} />
-      </BarChart></ResponsiveContainer></div>
+      <SimpleBarsVertical data={calendarioVencimentos} labelKey="label" valueKey="valor" color={C.lime} />
     </Panel>
     <Panel title="Próximos vencimentos">
       {proximosVencimentos.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Nenhuma aplicação ativa.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -665,13 +799,7 @@ function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expa
             {inv.observacoes && <div><SectionLabel>Observações</SectionLabel><p style={{ fontSize: 13 }}>{inv.observacoes}</p></div>}
             <div>
               <SectionLabel>Evolução mensal (valor bruto)</SectionLabel>
-              <div style={{ width: '100%', height: 160 }}><ResponsiveContainer><LineChart data={buildMonthlySeriesForInv(inv, refTaxas, todayStr())}>
-                <CartesianGrid stroke={C.panel2} strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 10 }} axisLine={{ stroke: C.panel2 }} tickLine={false} />
-                <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={{ stroke: C.panel2 }} tickLine={false} tickFormatter={(v) => (v / 1000).toFixed(1) + 'k'} width={44} />
-                <Tooltip contentStyle={{ background: C.panel2, border: 'none', borderRadius: 10, color: C.text, fontSize: 12 }} formatter={(v) => fmtBRL(v)} />
-                <Line type="monotone" dataKey="bruto" stroke={C.lime} strokeWidth={2} dot={{ r: 2.5, fill: C.lime }} />
-              </LineChart></ResponsiveContainer></div>
+              <MiniLineChart data={buildMonthlySeriesForInv(inv, refTaxas, todayStr())} valueKey="bruto" labelKey="label" height={140} color={C.lime} />
               <div style={{ color: C.muted, fontSize: 10.5, marginTop: 2 }}>fim de cada mês — projetado pela taxa efetiva atual entre os lançamentos reais que você fez</div>
             </div>
             <div>
