@@ -121,13 +121,21 @@ function todayStr() {
 function bcbDateToISO(d) { const [dd, mm, yyyy] = d.split('/'); return `${yyyy}-${mm}-${dd}`; }
 function aliquotaIRPorDias(dias) { if (dias <= 180) return 22.5; if (dias <= 360) return 20; if (dias <= 720) return 17.5; return 15; }
 function aliquotaIOFPorDias(dias) { if (dias >= 30) return 0; if (dias <= 0) return 100; return IOF_TABLE[dias - 1]; }
-function fatorAcumulado(serieDiaria, d1, d2, multiplicador = 1) {
+function fatorAcumulado(serieDiaria, d1, d2, multiplicador = 1, incluirInicio = false) {
   let fator = 1;
   for (let i = 0; i < serieDiaria.length; i++) {
     const item = serieDiaria[i];
-    if (item.data > d1 && item.data <= d2) {
-      // Para "x% do CDI/Selic", o percentual multiplica a taxa de cada dia:
-      // fator = produto(1 + taxa_diaria × x/100).
+    // Na aplicação inicial, a instituição começa a remunerar no próprio
+    // dia da aplicação. Por isso o primeiro dia é inclusivo.
+    // Para um saldo/âncora informado pelo usuário, o valor informado já é
+    // o saldo daquele dia e a remuneração começa no pregão seguinte.
+    const dentroDoPeriodo = incluirInicio
+      ? item.data >= d1 && item.data <= d2
+      : item.data > d1 && item.data <= d2;
+    if (dentroDoPeriodo) {
+      // Séries 12 (CDI) e 11 (Selic) são taxas DIÁRIAS (% a.d.).
+      // Para x% do indexador, x% é aplicado à taxa de cada pregão,
+      // e os fatores diários são compostos multiplicativamente.
       fator *= (1 + (item.valor / 100) * multiplicador);
     }
   }
@@ -187,10 +195,10 @@ function calcMetrics(inv, today, ref) {
   const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
   let valorAtualBruto, precisao = 'estimado';
   if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
-    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, today, (Number(inv.parametroValor) || 0) / 100);
+    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, today, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
     precisao = 'historico';
   } else if (!usaOverride && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
-    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, today, (Number(inv.parametroValor) || 0) / 100);
+    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, today, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
     precisao = 'historico';
   } else {
     valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, duDesdeAncora / 252);
@@ -250,10 +258,10 @@ function valorProjetadoEm(inv, dataAlvo, ref, today) {
   const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
   const passado = dataAlvo <= today;
   if (!usaOverride && passado && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
-    return ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100);
+    return ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
   }
   if (!usaOverride && passado && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
-    return ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100);
+    return ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
   }
   const du = diasUteisEntre(ancoraData, dataAlvo);
   const taxaAnual = taxaAnualEfetiva(inv, ref);
@@ -300,7 +308,7 @@ function buildRentabilidadeMensalMatrix(ativos, ref, today) {
       if (valorInicio > 0) { somaPeso += valorInicio; somaPesoRetorno += valorInicio * (valorFim / valorInicio - 1); }
     });
     const retornoCarteira = somaPeso > 0 ? (somaPesoRetorno / somaPeso) * 100 : null;
-    const retornoCDI = ref.historicoCDI && ref.historicoCDI.length ? (fatorAcumulado(ref.historicoCDI, inicioStr, fimStr, 1) - 1) * 100 : null;
+    const retornoCDI = ref.historicoCDI && ref.historicoCDI.length ? (fatorAcumulado(ref.historicoCDI, inicioStr, fimStr, 1, true) - 1) * 100 : null;
     if (!anos[y]) anos[y] = { carteira: Array(12).fill(null), cdi: Array(12).fill(null) };
     anos[y].carteira[m] = retornoCarteira;
     anos[y].cdi[m] = retornoCDI;
@@ -822,7 +830,7 @@ function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expa
             <Mini label={m.projetado ? 'Atual (líquido) · projetado' : 'Atual (líquido)'} value={fmtBRL(m.valorAtualLiquido)} accent={C.lime} />
             <Mini label="Estimado líquido no venc." value={fmtBRL(m.valorEstLiquidoVenc)} accent={C.blue} />
           </div>
-          {m.projetado && <div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{m.precisao === 'historico' ? `composto dia a dia com o histórico real do CDI/Selic desde ${fmtData(m.ancoraData)}` : `projetado a partir de ${fmtData(m.ancoraData)} pela taxa efetiva atual (${fmtPct(m.taxaAnual)} a.a.) — lance um valor real do extrato quando quiser corrigir`}</div>}
+          {m.projetado && <div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{m.precisao === 'historico' ? `composto dia a dia com o histórico oficial do CDI/Selic, incluindo o dia da aplicação` : `projetado a partir de ${fmtData(m.ancoraData)} pela taxa efetiva atual (${fmtPct(m.taxaAnual)} a.a.) — lance um valor real do extrato quando quiser corrigir`}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 12 }}>
             <Mini label="Rent. bruta / mês" value={fmtPct(m.rentBrutaMensal)} />
             <div><div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Rent. líquida / mês</div><Delta value={m.rentLiquidaMensal} size={13.5} /></div>
