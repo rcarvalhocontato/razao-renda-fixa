@@ -8,6 +8,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Razão" />
 <meta name="theme-color" content="#0A0D12" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<meta name="razao-version" content="2026-08-14-v2" />
 <link rel="apple-touch-icon" href="icon.png" />
 <link rel="manifest" href="manifest.json" />
 <style>
@@ -142,12 +146,21 @@ function fatorAcumulado(serieDiaria, d1, d2, multiplicador = 1, incluirInicio = 
   return fator;
 }
 async function fetchHistoricoDiario(codigo, dataInicialISO, dataFinalISO) {
+  if (!dataInicialISO || !dataFinalISO || dataInicialISO > dataFinalISO) return [];
   const [yi, mi, di] = dataInicialISO.split('-'); const [yf, mf, df] = dataFinalISO.split('-');
   const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados?dataInicial=${di}/${mi}/${yi}&dataFinal=${df}/${mf}/${yf}&formato=json`;
-  const resp = await fetch(url);
+  const resp = await fetch(url, { cache: 'no-store' });
   if (!resp.ok) throw new Error('histórico BCB indisponível');
   const json = await resp.json();
-  return json.map(item => ({ data: bcbDateToISO(item.data), valor: parseFloat(item.valor.replace(',', '.')) }));
+  return json.map(item => ({ data: bcbDateToISO(item.data), valor: parseFloat(String(item.valor).replace(',', '.')) }))
+    .filter(item => item.data && Number.isFinite(item.valor))
+    .sort((a, b) => a.data.localeCompare(b.data));
+}
+function ultimaDataDisponivel(serie, limite) {
+  if (!serie || !serie.length) return null;
+  let ultima = null;
+  for (const item of serie) if (item.data <= limite) ultima = item.data;
+  return ultima;
 }
 function diasUteisEntre(d1, d2) {
   const start = new Date(d1 + 'T00:00:00'), end = new Date(d2 + 'T00:00:00');
@@ -194,11 +207,15 @@ function calcMetrics(inv, today, ref) {
   const projetado = diasDesdeAncora > 0;
   const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
   let valorAtualBruto, precisao = 'estimado';
+  const ultimaDataCDI = ultimaDataDisponivel(ref.historicoCDI, today);
+  const ultimaDataSelic = ultimaDataDisponivel(ref.historicoSelic, today);
   if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
-    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, today, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
+    const dataRendimento = ultimaDataCDI || ancoraData;
+    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataRendimento, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
     precisao = 'historico';
   } else if (!usaOverride && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
-    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, today, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
+    const dataRendimento = ultimaDataSelic || ancoraData;
+    valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, dataRendimento, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
     precisao = 'historico';
   } else {
     valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, duDesdeAncora / 252);
@@ -234,7 +251,7 @@ function calcMetrics(inv, today, ref) {
 
   return { diasCorridos, diasTotais, diasRestantes, valorAtualBruto, ganhoBruto, iofAliq, iofValor, aliqIR, irValor,
     valorAtualLiquido, valorEstBrutoVenc, ganhoEstVenc, iofAliqVenc, iofValorVenc, aliqIRVenc, irValorVenc, valorEstLiquidoVenc, taxaAnual, projetado, ancoraData, precisao,
-    rentBrutaTotal, rentLiquidaTotal, rentBrutaMensal, rentLiquidaMensal, pctCDIBruto, pctCDILiquido };
+    rentBrutaTotal, rentLiquidaTotal, rentBrutaMensal, rentLiquidaMensal, pctCDIBruto, pctCDILiquido, ultimaDataRendimento: inv.indexador === 'CDI' ? ultimaDataCDI : inv.indexador === 'SELIC' ? ultimaDataSelic : today };
 }
 function buildEvolutionSeries(list, metricsById, today) {
   const events = [];
@@ -339,7 +356,7 @@ async function fetchTaxasBCB() {
   // 13522 = IPCA acumulado em 12 meses (%)
   const series = { selic: 432, cdi: 4389, ipca: 13522 };
   const entries = await Promise.all(Object.entries(series).map(async ([chave, codigo]) => {
-    const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados/ultimos/1?formato=json`);
+    const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.${codigo}/dados/ultimos/1?formato=json`, { cache: 'no-store' });
     if (!resp.ok) throw new Error('BCB indisponível: ' + chave);
     const json = await resp.json(); const item = json[0];
     return [chave, { valor: parseFloat(item.valor.replace(',', '.')), data: bcbDateToISO(item.data) }];
@@ -476,7 +493,7 @@ function TaxasBar({ refTaxas, status, onRefresh, onSaveManual, historicoStatus, 
     : status === 'conectado' ? 'Banco Central · atualizado' : status === 'carregando' ? 'Atualizando taxas do Banco Central…' : status === 'manual' ? 'Valores mantidos manualmente' : 'Conexão automática indisponível aqui';
   const totalPregoes = (historicoCDICount || 0) + (historicoSelicCount || 0);
   const histLabel = historicoStatus === 'carregando' ? 'baixando o histórico diário do CDI/Selic…'
-    : historicoStatus === 'ok' ? `histórico diário carregado (${totalPregoes} pregões) — CDI/Selic compostos dia a dia, aplicando o % contratado à taxa de cada pregão`
+    : historicoStatus === 'ok' ? `histórico diário carregado (${totalPregoes} pregões) — CDI/Selic compostos dia a dia até o último pregão disponível, aplicando o % contratado à taxa de cada pregão`
     : historicoStatus === 'erro' ? 'não consegui baixar o histórico diário — usando taxa atual constante como estimativa' : null;
   return <div style={{ maxWidth: 1152, margin: '16px auto 0', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', padding: '4px 4px 12px' }}>
     <button onClick={onRefresh} title="Tentar buscar novamente no Banco Central" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -523,7 +540,9 @@ function App() {
   const [historicoDraft, setHistoricoDraft] = useState({ data: todayStr(), valor: '' });
   const [resgateDraft, setResgateDraft] = useState({ data: todayStr(), valor: '' });
   const [resgatandoId, setResgatandoId] = useState(null);
-  const today = todayStr();
+  // Mantém a data de cálculo atualizada enquanto o PWA permanece aberto.
+  const [today, setToday] = useState(todayStr());
+  const [historicoTick, setHistoricoTick] = useState(0);
 
   const refreshTaxas = useCallback(() => {
     setTaxaStatus('carregando');
@@ -548,8 +567,32 @@ function App() {
       const r2 = await storage.get('rf-taxas-referencia'); if (r2) { try { setRefTaxas(JSON.parse(r2.value)); } catch (e) {} }
       setLoading(false); refreshTaxas();
     })();
-    const interval = setInterval(refreshTaxas, 6 * 60 * 60 * 1000);
-    return () => clearInterval(interval);
+
+    // O BCB publica a taxa diária depois do pregão. Uma checagem horária
+    // permite incorporar o novo pregão assim que ele estiver disponível.
+    const intervalTaxas = setInterval(refreshTaxas, 60 * 60 * 1000);
+    const intervalHistorico = setInterval(() => {
+      const novaData = todayStr();
+      setToday(anterior => anterior === novaData ? anterior : novaData);
+      setHistoricoTick(t => t + 1);
+    }, 60 * 60 * 1000);
+
+    // Ao retornar do segundo plano/tela bloqueada, força nova leitura.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const novaData = todayStr();
+        setToday(anterior => anterior === novaData ? anterior : novaData);
+        setHistoricoTick(t => t + 1);
+        refreshTaxas();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(intervalTaxas);
+      clearInterval(intervalHistorico);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
     // eslint-disable-next-line
   }, []);
 
@@ -570,7 +613,13 @@ function App() {
       } catch (e) { if (!cancelado) setHistoricoIndices(h => ({ ...h, status: 'erro' })); }
     })();
     return () => { cancelado = true; };
-  }, [minDataCDI, minDataSelic, today]);
+  }, [minDataCDI, minDataSelic, today, historicoTick]);
+
+  const refreshTudo = useCallback(() => {
+    refreshTaxas();
+    setHistoricoTick(t => t + 1);
+    setToday(todayStr());
+  }, [refreshTaxas]);
 
   const refComHistorico = useMemo(() => ({ ...refTaxas, historicoCDI: historicoIndices.cdi, historicoSelic: historicoIndices.selic }), [refTaxas, historicoIndices]);
 
@@ -627,7 +676,7 @@ function App() {
         </div>
         <button onClick={openNew} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 10, padding: '10px 16px', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon name="plus" size={15} /> Nova aplicação</button>
       </div>
-      <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTaxas} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length} />
+      <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTudo} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length} />
       <div style={{ maxWidth: 1152, margin: '0 auto', display: 'flex', gap: 4, padding: '0 16px 14px' }}>
         {[['painel', 'Painel', 'grid'], ['ranking', 'Ranking', 'listOrdered'], ['lista', 'Aplicações', 'listChecks']].map(([t, lbl, ic]) => (
           <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? C.panel : 'transparent', border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 10, color: tab === t ? C.lime : C.muted, fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name={ic} size={14} /> {lbl}</button>
