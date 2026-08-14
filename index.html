@@ -162,6 +162,14 @@ function ultimaDataDisponivel(serie, limite) {
   for (const item of serie) if (item.data <= limite) ultima = item.data;
   return ultima;
 }
+function ontemISO(iso) { const d = new Date(iso+'T00:00:00'); d.setDate(d.getDate()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function diasUteisProvisorios(d1, d2) {
+  if (!d1 || !d2 || d2 <= d1) return 0;
+  const start = new Date(d1+'T00:00:00'), end = new Date(d2+'T00:00:00');
+  let n=0, cur=new Date(start); cur.setDate(cur.getDate()+1);
+  while(cur<=end){ const dow=cur.getDay(); if(dow!==0 && dow!==6) n++; cur.setDate(cur.getDate()+1); }
+  return n;
+}
 function diasUteisEntre(d1, d2) {
   const start = new Date(d1 + 'T00:00:00'), end = new Date(d2 + 'T00:00:00');
   if (end <= start) return 0;
@@ -212,11 +220,18 @@ function calcMetrics(inv, today, ref) {
   if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
     const dataRendimento = ultimaDataCDI || ancoraData;
     valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataRendimento, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
-    precisao = 'historico';
+    // O CDI diário do SGS pode aparecer com defasagem de um dia útil.
+    // Enquanto o dado oficial não chega, provisionamos apenas os dias úteis
+    // encerrados (até ontem), usando a última taxa anualizada conhecida.
+    const diasProv = diasUteisProvisorios(dataRendimento, ontemISO(today));
+    if (diasProv > 0) valorAtualBruto *= Math.pow(1 + taxaAnual / 100, diasProv / 252);
+    precisao = diasProv > 0 ? 'historico-provisorio' : 'historico';
   } else if (!usaOverride && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
     const dataRendimento = ultimaDataSelic || ancoraData;
     valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, dataRendimento, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
-    precisao = 'historico';
+    const diasProv = diasUteisProvisorios(dataRendimento, ontemISO(today));
+    if (diasProv > 0) valorAtualBruto *= Math.pow(1 + taxaAnual / 100, diasProv / 252);
+    precisao = diasProv > 0 ? 'historico-provisorio' : 'historico';
   } else {
     valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, duDesdeAncora / 252);
   }
@@ -275,10 +290,20 @@ function valorProjetadoEm(inv, dataAlvo, ref, today) {
   const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
   const passado = dataAlvo <= today;
   if (!usaOverride && passado && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
-    return ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
+    const ultimo = ultimaDataDisponivel(ref.historicoCDI, dataAlvo) || ancoraData;
+    let valor = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, ultimo, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
+    const limite = dataAlvo < today ? dataAlvo : ontemISO(today);
+    const diasProv = diasUteisProvisorios(ultimo, limite);
+    if (diasProv > 0) valor *= Math.pow(1 + taxaAnualEfetiva(inv, ref) / 100, diasProv / 252);
+    return valor;
   }
   if (!usaOverride && passado && inv.indexador === 'SELIC' && ref.historicoSelic && ref.historicoSelic.length) {
-    return ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, dataAlvo, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
+    const ultimo = ultimaDataDisponivel(ref.historicoSelic, dataAlvo) || ancoraData;
+    let valor = ancoraValor * fatorAcumulado(ref.historicoSelic, ancoraData, ultimo, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
+    const limite = dataAlvo < today ? dataAlvo : ontemISO(today);
+    const diasProv = diasUteisProvisorios(ultimo, limite);
+    if (diasProv > 0) valor *= Math.pow(1 + taxaAnualEfetiva(inv, ref) / 100, diasProv / 252);
+    return valor;
   }
   const du = diasUteisEntre(ancoraData, dataAlvo);
   const taxaAnual = taxaAnualEfetiva(inv, ref);
