@@ -11,7 +11,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<meta name="razao-version" content="2026-08-14-v2" />
+<meta name="razao-version" content="2026-08-14-v5" />
 <link rel="apple-touch-icon" href="icon.png" />
 <link rel="manifest" href="manifest.json" />
 <style>
@@ -124,6 +124,9 @@ function todayStr() {
 }
 function bcbDateToISO(d) { const [dd, mm, yyyy] = d.split('/'); return `${yyyy}-${mm}-${dd}`; }
 function aliquotaIRPorDias(dias) { if (dias <= 180) return 22.5; if (dias <= 360) return 20; if (dias <= 720) return 17.5; return 15; }
+function taxaComparacaoIR(inv, dias) { return inv.isentoIR ? aliquotaIRPorDias(Math.max(dias,1)) : (inv.aliquotaIRManual !== '' && inv.aliquotaIRManual != null ? Number(inv.aliquotaIRManual) : aliquotaIRPorDias(Math.max(dias,1))); }
+function taxaAnualTributavelEquivalente(inv, ref, dias) { const taxa = taxaAnualEfetiva(inv, ref); const ir = taxaComparacaoIR(inv, dias); return inv.isentoIR ? taxa / Math.max(1 - ir/100, 0.0001) : taxa; }
+function percentualCDIEquivalente(inv, ref, dias) { const ir = taxaComparacaoIR(inv, dias); const p = Number(inv.parametroValor)||0; if (inv.indexador === 'CDI') return inv.isentoIR ? p / Math.max(1-ir/100,0.0001) : p; const anualTrib = taxaAnualTributavelEquivalente(inv, ref, dias); return ref.cdi > 0 ? (anualTrib / ref.cdi) * 100 : null; }
 function aliquotaIOFPorDias(dias) { if (dias >= 30) return 0; if (dias <= 0) return 100; return IOF_TABLE[dias - 1]; }
 function fatorAcumulado(serieDiaria, d1, d2, multiplicador = 1, incluirInicio = false) {
   let fator = 1;
@@ -266,7 +269,7 @@ function calcMetrics(inv, today, ref) {
 
   return { diasCorridos, diasTotais, diasRestantes, valorAtualBruto, ganhoBruto, iofAliq, iofValor, aliqIR, irValor,
     valorAtualLiquido, valorEstBrutoVenc, ganhoEstVenc, iofAliqVenc, iofValorVenc, aliqIRVenc, irValorVenc, valorEstLiquidoVenc, taxaAnual, projetado, ancoraData, precisao,
-    rentBrutaTotal, rentLiquidaTotal, rentBrutaMensal, rentLiquidaMensal, pctCDIBruto, pctCDILiquido, ultimaDataRendimento: inv.indexador === 'CDI' ? ultimaDataCDI : inv.indexador === 'SELIC' ? ultimaDataSelic : today };
+    rentBrutaTotal, rentLiquidaTotal, rentBrutaMensal, rentLiquidaMensal, pctCDIBruto, pctCDILiquido, ultimaDataRendimento: inv.indexador === 'CDI' ? ultimaDataCDI : inv.indexador === 'SELIC' ? ultimaDataSelic : today, aliquotaComparacao: taxaComparacaoIR(inv, diasCorridos), taxaAnualTributavelEquivalente: taxaAnualTributavelEquivalente(inv, ref, diasCorridos), percentualCDIEquivalente: percentualCDIEquivalente(inv, ref, diasCorridos) };
 }
 function buildEvolutionSeries(list, metricsById, today) {
   const events = [];
@@ -734,6 +737,111 @@ function App() {
   </div>;
 }
 
+function IndicadoresCarteira({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today, matrizMensal }) {
+  const ganhoBruto = totais.bruto - totais.aplicado;
+  const rentLiquida = totais.aplicado > 0 ? (ganhoLiquido / totais.aplicado) * 100 : 0;
+  const impostoPotencial = Math.max(totais.bruto - totais.liquido, 0);
+  const pesoTotal = ativos.reduce((a, inv) => a + (metricsById[inv.id]?.valorAtualBruto || 0), 0) || 1;
+  const taxaMedia = ativos.reduce((a, inv) => a + (metricsById[inv.id]?.valorAtualBruto || 0) * taxaAnualEfetiva(inv, refTaxas), 0) / pesoTotal;
+  const prazoMedio = ativos.reduce((a, inv) => a + (metricsById[inv.id]?.valorAtualBruto || 0) * Math.max(metricsById[inv.id]?.diasRestantes || 0, 0), 0) / pesoTotal;
+  const porInstituicao = {};
+  ativos.forEach(inv => { porInstituicao[inv.instituicao] = (porInstituicao[inv.instituicao] || 0) + (metricsById[inv.id]?.valorAtualBruto || 0); });
+  const maiorEmissor = Object.entries(porInstituicao).sort((a,b)=>b[1]-a[1])[0];
+  const pctMaiorEmissor = maiorEmissor ? (maiorEmissor[1] / pesoTotal) * 100 : 0;
+  const acima100CDI = ativos.reduce((sum, inv) => {
+    const p = Number(inv.parametroValor) || 0;
+    return sum + (inv.indexador === 'CDI' && p > 100 ? (metricsById[inv.id]?.valorAtualBruto || 0) : 0);
+  }, 0);
+  const pctAcima100CDI = (acima100CDI / pesoTotal) * 100;
+  const pctIsentos = ativos.reduce((sum, inv) => sum + (inv.isentoIR ? (metricsById[inv.id]?.valorAtualBruto || 0) : 0), 0) / pesoTotal * 100;
+  const anoAtual = new Date(today + 'T00:00:00').getFullYear();
+  const mesAtual = new Date(today + 'T00:00:00').getMonth();
+  const dadosAno = matrizMensal?.dados?.[anoAtual];
+  const retMes = dadosAno?.carteira?.[mesAtual] ?? null;
+  const cdiMes = dadosAno?.cdi?.[mesAtual] ?? null;
+  const mesesAno = dadosAno ? dadosAno.carteira.map((v, i) => v !== null && dadosAno.cdi[i] !== null ? i : null).filter(v => v !== null) : [];
+  const retAno = mesesAno.length ? (mesesAno.reduce((f, i) => f * (1 + dadosAno.carteira[i] / 100), 1) - 1) * 100 : null;
+  const cdiAno = mesesAno.length ? (mesesAno.reduce((f, i) => f * (1 + dadosAno.cdi[i] / 100), 1) - 1) * 100 : null;
+  const pctCdiMes = retMes !== null && cdiMes > 0 ? (retMes / cdiMes) * 100 : null;
+  const deltaMes = retMes !== null && cdiMes !== null ? retMes - cdiMes : null;
+  const deltaAno = retAno !== null && cdiAno !== null ? retAno - cdiAno : null;
+  const cards = [
+    ['Patrimônio líquido', fmtBRL(totais.liquido), 'saldo líquido estimado hoje', C.lime],
+    ['Ganho líquido', fmtBRL(ganhoLiquido), 'rendimento após IR/IOF', ganhoLiquido >= 0 ? C.lime : C.red],
+    ['Rentabilidade líquida', fmtPct(rentLiquida), 'sobre o capital aplicado', rentLiquida >= 0 ? C.lime : C.red],
+    ['Imposto potencial hoje', fmtBRL(impostoPotencial), 'IR/IOF estimados se resgatasse hoje', impostoPotencial > 0 ? C.red : C.muted],
+    ['Mês atual', retMes === null ? '—' : fmtPct(retMes), cdiMes === null ? 'CDI: —' : `CDI ${fmtPct(cdiMes)} · ${deltaMes >= 0 ? '+' : ''}${fmtPct(deltaMes)}`, retMes === null ? C.muted : (retMes >= (cdiMes || 0) ? C.lime : C.red)],
+    ['Ano atual', retAno === null ? '—' : fmtPct(retAno), cdiAno === null ? 'CDI: —' : `CDI ${fmtPct(cdiAno)} · ${deltaAno >= 0 ? '+' : ''}${fmtPct(deltaAno)}`, retAno === null ? C.muted : (retAno >= (cdiAno || 0) ? C.lime : C.red)],
+    ['% do CDI · mês', pctCdiMes === null ? '—' : fmtPct(pctCdiMes), '100% = igual ao CDI no mês', pctCdiMes === null ? C.muted : (pctCdiMes >= 100 ? C.lime : C.red)],
+    ['Maior emissor', maiorEmissor ? fmtPct(pctMaiorEmissor) : '—', maiorEmissor ? `${maiorEmissor[0]} · concentração` : 'sem dados', pctMaiorEmissor > 40 ? C.red : C.blue],
+    ['CDI > 100%', fmtPct(pctAcima100CDI), 'percentual da carteira acima de 100% do CDI', pctAcima100CDI > 0 ? C.lime : C.muted],
+    ['Isentos de IR', fmtPct(pctIsentos), 'participação da carteira em produtos isentos', C.blue],
+    ['Taxa média contratada', fmtPct(taxaMedia), 'ponderada pelo valor bruto atual', C.blue],
+    ['Prazo médio', `${Math.round(prazoMedio)} dias`, 'até o vencimento, ponderado', C.blue],
+    ['CDI atual', fmtPct(Number(refTaxas?.cdi) || 0), 'taxa anualizada · base 252', C.blue],
+    ['Selic atual', fmtPct(Number(refTaxas?.selic) || 0), 'taxa de referência anual', C.blue],
+    ['IPCA 12 meses', fmtPct(Number(refTaxas?.ipca) || 0), 'inflação acumulada em 12 meses', C.blue],
+  ];
+  return <Panel title="Indicadores da carteira" subtitle="visão consolidada de patrimônio, desempenho, eficiência contra o CDI, concentração e referências macroeconômicas">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
+      {cards.map(([label, value, sub, accent]) => <div key={label} style={{ background: C.panel2, border: `1px solid ${C.hairline}`, borderRadius: 10, padding: '12px 13px', minHeight: 82 }}>
+        <div style={{ color: C.muted, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 800, letterSpacing: .3 }}>{label}</div>
+        <div style={{ color: accent, fontFamily: "'IBM Plex Mono', monospace", fontSize: 17, fontWeight: 700, marginTop: 7, lineHeight: 1.1 }}>{value}</div>
+        <div style={{ color: C.muted, fontSize: 9.5, marginTop: 5, lineHeight: 1.25 }}>{sub}</div>
+      </div>)}
+    </div>
+    <div style={{ marginTop: 10, color: C.muted, fontSize: 10.5, lineHeight: 1.4 }}>
+      A comparação mensal/anual usa os retornos ponderados da carteira e o CDI do mesmo período. Taxa média e prazo médio são ponderados pelo valor bruto atual das aplicações ativas.
+    </div>
+  </Panel>;
+}
+
+function InsightsCarteira({ ativos, metricsById, refTaxas, today }) {
+  const total = ativos.reduce((s, inv) => s + (metricsById[inv.id]?.valorAtualBruto || 0), 0) || 1;
+  const porInstituicao = {};
+  ativos.forEach(inv => { porInstituicao[inv.instituicao] = (porInstituicao[inv.instituicao] || 0) + (metricsById[inv.id]?.valorAtualBruto || 0); });
+  const maior = Object.entries(porInstituicao).sort((a,b)=>b[1]-a[1])[0];
+  const maiorPct = maior ? maior[1] / total * 100 : 0;
+  const agora = new Date(today + 'T00:00:00');
+  const limite30 = new Date(agora); limite30.setDate(limite30.getDate()+30);
+  const venc30 = ativos.filter(inv => { const d = new Date(inv.dataVencimento+'T00:00:00'); return d >= agora && d <= limite30; });
+  const valorVenc30 = venc30.reduce((s,inv)=>s+(metricsById[inv.id]?.valorAtualBruto||0),0);
+  const pctVenc30 = valorVenc30/total*100;
+  const semLiquidez = ativos.filter(inv => String(inv.liquidez||'').toLowerCase().includes('vencimento')).reduce((s,inv)=>s+(metricsById[inv.id]?.valorAtualBruto||0),0)/total*100;
+  const baixos = ativos.filter(inv => inv.indexador==='CDI' && !inv.isentoIR && (Number(inv.parametroValor)||0) > 0 && (Number(inv.parametroValor)||0) < 90)
+    .sort((a,b)=>(metricsById[a.id]?.rentLiquidaMensal ?? 999)-(metricsById[b.id]?.rentLiquidaMensal ?? 999));
+  const equivalentes = ativos.filter(inv => inv.isentoIR && metricsById[inv.id]?.percentualCDIEquivalente != null);
+  const oportunidades = equivalentes.filter(inv => metricsById[inv.id].percentualCDIEquivalente >= 110)
+    .sort((a,b)=>metricsById[b.id].percentualCDIEquivalente-metricsById[a.id].percentualCDIEquivalente);
+  const melhores = ativos.slice().sort((a,b)=>(metricsById[b.id]?.rentLiquidaMensal ?? -999)-(metricsById[a.id]?.rentLiquidaMensal ?? -999)).slice(0,3);
+  const piores = ativos.slice().sort((a,b)=>(metricsById[a.id]?.rentLiquidaMensal ?? 999)-(metricsById[b.id]?.rentLiquidaMensal ?? 999)).slice(0,3);
+  const insights=[];
+  if (maior && maiorPct >= 40) insights.push({tipo:'atenção', titulo:'Concentração elevada em um emissor', texto:`${maior[0]} representa ${fmtPct(maiorPct)} do patrimônio. Vale revisar a concentração e a cobertura do FGC, quando aplicável.`, cor:C.red});
+  if (pctVenc30 >= 20 && venc30.length) insights.push({tipo:'atenção', titulo:'Vencimentos próximos', texto:`${fmtPct(pctVenc30)} da carteira vence nos próximos 30 dias. Vale planejar a destinação do dinheiro antes dos vencimentos.`, cor:C.blue});
+  if (semLiquidez >= 50) insights.push({tipo:'atenção', titulo:'Liquidez concentrada no vencimento', texto:`${fmtPct(semLiquidez)} da carteira está marcada como “No vencimento”. Vale conferir se a reserva de liquidez está separada desses recursos.`, cor:C.blue});
+  if (baixos.length) insights.push({tipo:'revisar', titulo:'Taxas CDI abaixo de 90%', texto:`Há ${baixos.length} aplicação${baixos.length>1?'ões':''} tributável${baixos.length>1?'eis':''} em CDI abaixo de 90%. São candidatas a revisão quando houver liquidez ou vencimento.`, cor:C.lime});
+  if (oportunidades.length) insights.push({tipo:'oportunidade', titulo:'Produtos isentos com boa equivalência tributável', texto:`${oportunidades.length} aplicação${oportunidades.length>1?'ões':''} isenta${oportunidades.length>1?'s':''} equivale${oportunidades.length>1?'m':''} a pelo menos 110% do CDI em um produto tributável na alíquota aplicável. Compare também prazo, liquidez e risco do emissor.`, cor:C.blue});
+  if (!insights.length) insights.push({tipo:'ok', titulo:'Nenhum alerta prioritário', texto:'A carteira não apresenta, pelos critérios atuais, um ponto de revisão que mereça destaque imediato.', cor:C.lime});
+  const Row=({inv, tipo})=>{const m=metricsById[inv.id]; return <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid ${C.hairline}`}}><div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{inv.instituicao}</div><div style={{fontSize:10.5,color:C.muted}}>{descricaoTaxa(inv,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}{inv.isentoIR ? ` · equiv. ${fmtPct(m.percentualCDIEquivalente)} CDI` : ''}</div></div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5,color:m.rentLiquidaMensal>=0?C.lime:C.red}}>{fmtPct(m.rentLiquidaMensal)}<div style={{fontFamily:'inherit',fontSize:9,color:C.muted,textAlign:'right'}}>líq./mês</div></div></div>};
+  return <Panel title="Insights e pontos de revisão" subtitle="comparações tributárias e regras objetivas de triagem — não são recomendações automáticas de compra ou venda">
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:12}}>
+      <div style={{background:C.panel2,border:`1px solid ${C.hairline}`,borderRadius:10,padding:'12px 13px'}}>
+        <SectionLabel icon={<Icon name="alert" size={13}/>}>Leitura automática</SectionLabel>
+        <div style={{display:'flex',flexDirection:'column',gap:9}}>{insights.slice(0,5).map((x,i)=><div key={i} style={{borderLeft:`3px solid ${x.cor}`,paddingLeft:9}}><div style={{fontSize:12.5,fontWeight:800}}>{x.titulo}</div><div style={{fontSize:10.5,color:C.muted,lineHeight:1.35,marginTop:3}}>{x.texto}</div></div>)}</div>
+      </div>
+      <div style={{background:C.panel2,border:`1px solid ${C.hairline}`,borderRadius:10,padding:'12px 13px'}}>
+        <SectionLabel icon={<Icon name="trophy" size={13}/>}>Melhores · líquido/mês</SectionLabel>
+        {melhores.length ? melhores.map(inv=><Row key={inv.id} inv={inv}/>) : <div style={{color:C.muted,fontSize:11}}>Sem aplicações.</div>}
+      </div>
+      <div style={{background:C.panel2,border:`1px solid ${C.hairline}`,borderRadius:10,padding:'12px 13px'}}>
+        <SectionLabel icon={<Icon name="chevronDown" size={13}/>}>Revisar primeiro</SectionLabel>
+        {piores.length ? piores.map(inv=><Row key={inv.id} inv={inv}/>) : <div style={{color:C.muted,fontSize:11}}>Sem aplicações.</div>}
+      </div>
+    </div>
+    <div style={{marginTop:10,color:C.muted,fontSize:10,lineHeight:1.35}}>Equivalência tributável: transforma a taxa de um produto isento na taxa bruta aproximada que um produto tributável precisaria oferecer para gerar o mesmo retorno líquido, usando a alíquota de IR aplicável ao prazo. A comparação não considera diferenças de liquidez, risco, carência ou custos.</div>
+  </Panel>;
+}
+
 function Dashboard({ porTipo, porIndexador, porInstituicao, calendarioVencimentos, evolucao, proximosVencimentos, metricsById, resgatados, ativos, totais, ganhoLiquido, refTaxas, today }) {
   const composicaoPie = [
     { name: 'Aplicado (principal)', value: totais.aplicado, cor: C.blue },
@@ -743,6 +851,11 @@ function Dashboard({ porTipo, porIndexador, porInstituicao, calendarioVencimento
   const matrizMensal = useMemo(() => buildRentabilidadeMensalMatrix(ativos, refTaxas, today), [ativos, refTaxas, today]);
   const alocacaoInstituicao = useMemo(() => buildAlocacaoInstituicao(ativos, metricsById), [ativos, metricsById]);
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <IndicadoresCarteira ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={refTaxas} today={today} matrizMensal={matrizMensal} />
+    <InsightsCarteira ativos={ativos} metricsById={metricsById} refTaxas={refTaxas} today={today} />
+    <Panel title="Equivalência tributária" subtitle="quanto um produto tributável precisaria pagar para igualar o retorno líquido de produtos isentos">
+      {ativos.filter(inv=>inv.isentoIR).length === 0 ? <div style={{color:C.muted,fontSize:12}}>Nenhum produto isento cadastrado.</div> : <div style={{display:'flex',flexDirection:'column',gap:8}}>{ativos.filter(inv=>inv.isentoIR).sort((a,b)=>(metricsById[b.id].percentualCDIEquivalente||0)-(metricsById[a.id].percentualCDIEquivalente||0)).map(inv=>{const m=metricsById[inv.id]; return <div key={inv.id} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:12,alignItems:'center',padding:'9px 0',borderBottom:`1px solid ${C.hairline}`}}><div><div style={{fontWeight:700,fontSize:12.5}}>{inv.instituicao}</div><div style={{fontSize:10.5,color:C.muted}}>{descricaoTaxa(inv,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}</div></div><div style={{textAlign:'right'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:700}}>Equiv. CDI</div><div style={{fontFamily:"'IBM Plex Mono', monospace",color:C.blue,fontSize:13}}>{fmtPct(m.percentualCDIEquivalente)}</div></div><div style={{textAlign:'right'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:700}}>Líq./mês</div><div style={{fontFamily:"'IBM Plex Mono', monospace",color:C.lime,fontSize:13}}>{fmtPct(m.rentLiquidaMensal)}</div></div></div>})}</div>}
+    </Panel>
     <Panel title="Rentabilidade mensal e acumulada" subtitle="retorno líquido da carteira mês a mês, comparado ao CDI do mesmo período — ponderado pelo valor de cada título, sem distorção por aportes">
       {matrizMensal.anos.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sem dados suficientes ainda.</p> : (
         <div className="scrollbar-thin" style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
@@ -913,7 +1026,7 @@ function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expa
                 {inv.isentoIR && <Badge cor={C.lime} texto="Isento IR" />}
                 {inv.carteira && <Badge cor={C.blue} texto={inv.carteira} />}
               </div>
-              <div style={{ color: C.muted, fontSize: 11.5, marginTop: 5 }}>{descricaoTaxa(inv, refTaxas)} · aplicado em {fmtData(inv.dataAplicacao)} · vence em {fmtData(inv.dataVencimento)} · {inv.liquidez}</div>
+              <div style={{ color: C.muted, fontSize: 11.5, marginTop: 5 }}>{descricaoTaxa(inv, refTaxas)} · aplicado em {fmtData(inv.dataAplicacao)} · vence em {fmtData(inv.dataVencimento)} · {inv.liquidez}</div>{inv.isentoIR && <div style={{ color: C.blue, fontSize: 10.5, marginTop: 4 }}>Equivale a {fmtPct(m.percentualCDIEquivalente)} do CDI em produto tributável, considerando IR de {fmtPct(m.aliquotaComparacao)}.</div>}
               <div style={{ marginTop: 10, maxWidth: 340 }}><MaturityBar diasCorridos={m.diasCorridos} diasTotais={m.diasTotais} vencida={vencida} /><div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{inv.status === 'ativo' ? (m.diasRestantes >= 0 ? `${m.diasRestantes} dias até o vencimento` : `vencida há ${Math.abs(m.diasRestantes)} dias`) : `resgatado em ${fmtData(inv.dataResgate)}`}</div></div>
             </div>
             <div style={{ display: 'flex', gap: 4 }}>
@@ -930,19 +1043,21 @@ function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expa
           </div>
           {m.projetado && <div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{m.precisao === 'historico' ? `composto dia a dia com o histórico oficial do CDI/Selic, incluindo o dia da aplicação` : `projetado a partir de ${fmtData(m.ancoraData)} pela taxa efetiva atual (${fmtPct(m.taxaAnual)} a.a.) — lance um valor real do extrato quando quiser corrigir`}</div>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 12 }}>
-            <Mini label="Rent. bruta / mês" value={fmtPct(m.rentBrutaMensal)} />
             <div><div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Rent. líquida / mês</div><Delta value={m.rentLiquidaMensal} size={13.5} /></div>
             <Mini label="Rent. líquida total" value={fmtPct(m.rentLiquidaTotal)} />
             <Mini label="% do CDI (líquido)" value={m.pctCDILiquido !== null ? fmtPct(m.pctCDILiquido) : '—'} accent={m.pctCDILiquido !== null && m.pctCDILiquido >= 100 ? C.lime : C.text} />
+            <Mini label="Ganho líquido até hoje" value={fmtBRL(m.valorAtualLiquido - inv.valorAplicado)} accent={m.valorAtualLiquido >= inv.valorAplicado ? C.lime : C.red} />
           </div>
+          <div style={{ color: C.muted, fontSize: 9.5, marginTop: 4 }}>Rent. líquida / mês = taxa mensal equivalente do retorno líquido acumulado até hoje.</div>
           {expanded && <div style={{ marginTop: 16, borderTop: `1px solid ${C.hairline}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
               <Mini label="Dias corridos" value={m.diasCorridos} />
+              <Mini label="Rent. bruta / mês" value={fmtPct(m.rentBrutaMensal)} />
               <Mini label="Alíquota IR atual" value={inv.isentoIR ? 'Isento' : fmtPct(m.aliqIR)} />
               <Mini label="IOF (se resgate hoje)" value={m.iofAliq > 0 ? fmtPct(m.iofAliq) : '—'} />
               <Mini label="Ganho bruto até hoje" value={fmtBRL(m.ganhoBruto)} accent={m.ganhoBruto >= 0 ? C.lime : C.red} />
               <Mini label="Ganho estimado no venc." value={fmtBRL(m.ganhoEstVenc)} accent={m.ganhoEstVenc >= 0 ? C.lime : C.red} />
-              <Mini label="Rent. bruta total" value={fmtPct(m.rentBrutaTotal)} />
+              <Mini label="Rent. bruta total" value={fmtPct(m.rentBrutaTotal)} />{inv.isentoIR && <Mini label="Equiv. tributável" value={`${fmtPct(m.percentualCDIEquivalente)} do CDI`} accent={C.blue} />}
             </div>
             {inv.observacoes && <div><SectionLabel>Observações</SectionLabel><p style={{ fontSize: 13 }}>{inv.observacoes}</p></div>}
             <div>
