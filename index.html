@@ -166,18 +166,31 @@ function ultimaDataDisponivel(serie, limite) {
   return ultima;
 }
 function ontemISO(iso) { const d = new Date(iso+'T00:00:00'); d.setDate(d.getDate()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function pascoa(ano) {
+  const a=ano%19,b=Math.floor(ano/100),c=ano%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mes=Math.floor((h+l-7*m+114)/31),dia=((h+l-7*m+114)%31)+1;
+  return new Date(`${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}T00:00:00`);
+}
+function isoDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function feriadosMercadoBR(ano) {
+  const out = new Set([`${ano}-01-01`,`${ano}-04-21`,`${ano}-05-01`,`${ano}-09-07`,`${ano}-10-12`,`${ano}-11-02`,`${ano}-11-15`,`${ano}-11-20`,`${ano}-12-25`]);
+  const p=pascoa(ano);
+  const add=(offset)=>{const d=new Date(p); d.setDate(d.getDate()+offset); out.add(isoDate(d));};
+  add(-48); add(-47); add(-2); add(60);
+  return out;
+}
+function ehDiaUtilMercado(d) { const dow=d.getDay(); if(dow===0||dow===6) return false; return !feriadosMercadoBR(d.getFullYear()).has(isoDate(d)); }
 function diasUteisProvisorios(d1, d2) {
   if (!d1 || !d2 || d2 <= d1) return 0;
   const start = new Date(d1+'T00:00:00'), end = new Date(d2+'T00:00:00');
   let n=0, cur=new Date(start); cur.setDate(cur.getDate()+1);
-  while(cur<=end){ const dow=cur.getDay(); if(dow!==0 && dow!==6) n++; cur.setDate(cur.getDate()+1); }
+  while(cur<=end){ if(ehDiaUtilMercado(cur)) n++; cur.setDate(cur.getDate()+1); }
   return n;
 }
 function diasUteisEntre(d1, d2) {
   const start = new Date(d1 + 'T00:00:00'), end = new Date(d2 + 'T00:00:00');
   if (end <= start) return 0;
   let count = 0; const cur = new Date(start); cur.setDate(cur.getDate() + 1);
-  while (cur <= end) { const dow = cur.getDay(); if (dow !== 0 && dow !== 6) count++; cur.setDate(cur.getDate() + 1); }
+  while (cur <= end) { if (ehDiaUtilMercado(cur)) count++; cur.setDate(cur.getDate() + 1); }
   return count;
 }
 function parametroLabel(indexador) {
@@ -236,7 +249,11 @@ function calcMetrics(inv, today, ref) {
     if (diasProv > 0) valorAtualBruto *= Math.pow(1 + taxaAnual / 100, diasProv / 252);
     precisao = diasProv > 0 ? 'historico-provisorio' : 'historico';
   } else {
-    valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, duDesdeAncora / 252);
+    // Prefixados usam base DU/252. Para uma nova aplicação, a data de liquidação
+    // é inclusiva; para um saldo informado por extrato, o saldo já representa
+    // aquele dia e a remuneração começa no próximo pregão.
+    const duPrefixado = diasUteisEntre(ancoraData, today) + (inv.indexador === 'Prefixado' && ancoraData === inv.dataAplicacao && ehDiaUtilMercado(new Date(ancoraData+'T00:00:00')) ? 1 : 0);
+    valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, Math.max(duPrefixado, 0) / 252);
   }
   const ganhoBruto = valorAtualBruto - inv.valorAplicado;
 
@@ -697,7 +714,7 @@ function App() {
 
   return <div style={{ background: C.bg, color: C.text, minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>
     <header style={{ background: C.bg, position: 'sticky', top: 0, zIndex: 10 }} className="px-4">
-      <div style={{ maxWidth: 1152, margin: '0 auto', padding: '20px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+      <div style={{ maxWidth: 1152, margin: '0 auto', padding: '14px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 32, height: 32, borderRadius: 9, background: C.lime, color: '#10160A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14 }}>R</div>
           <div><div style={{ fontWeight: 700, fontSize: 15 }}>Razão</div><div style={{ color: C.muted, fontSize: 10.5 }}>Controle de renda fixa</div></div>
@@ -712,7 +729,7 @@ function App() {
       </div>
     </header>
 
-    <main style={{ maxWidth: 1152, margin: '0 auto', padding: '24px 16px' }}>
+    <main style={{ maxWidth: 1152, margin: '0 auto', padding: '16px 16px 24px' }}>
       {loading ? <div style={{ color: C.muted, padding: 40, textAlign: 'center' }}>Carregando seu livro-razão…</div>
       : investments.length === 0 ? (
         <div style={{ border: `1px dashed ${C.panel2}`, borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>
@@ -767,31 +784,19 @@ function IndicadoresCarteira({ ativos, totais, ganhoLiquido, metricsById, refTax
   const deltaAno = retAno !== null && cdiAno !== null ? retAno - cdiAno : null;
   const cards = [
     ['Patrimônio líquido', fmtBRL(totais.liquido), 'saldo líquido estimado hoje', C.lime],
-    ['Ganho líquido', fmtBRL(ganhoLiquido), 'rendimento após IR/IOF', ganhoLiquido >= 0 ? C.lime : C.red],
+    ['Ganho líquido', fmtBRL(ganhoLiquido), 'após IR/IOF', ganhoLiquido >= 0 ? C.lime : C.red],
     ['Rentabilidade líquida', fmtPct(rentLiquida), 'sobre o capital aplicado', rentLiquida >= 0 ? C.lime : C.red],
-    ['Imposto potencial hoje', fmtBRL(impostoPotencial), 'IR/IOF estimados se resgatasse hoje', impostoPotencial > 0 ? C.red : C.muted],
-    ['Mês atual', retMes === null ? '—' : fmtPct(retMes), cdiMes === null ? 'CDI: —' : `CDI ${fmtPct(cdiMes)} · ${deltaMes >= 0 ? '+' : ''}${fmtPct(deltaMes)}`, retMes === null ? C.muted : (retMes >= (cdiMes || 0) ? C.lime : C.red)],
-    ['Ano atual', retAno === null ? '—' : fmtPct(retAno), cdiAno === null ? 'CDI: —' : `CDI ${fmtPct(cdiAno)} · ${deltaAno >= 0 ? '+' : ''}${fmtPct(deltaAno)}`, retAno === null ? C.muted : (retAno >= (cdiAno || 0) ? C.lime : C.red)],
-    ['% do CDI · mês', pctCdiMes === null ? '—' : fmtPct(pctCdiMes), '100% = igual ao CDI no mês', pctCdiMes === null ? C.muted : (pctCdiMes >= 100 ? C.lime : C.red)],
-    ['Maior emissor', maiorEmissor ? fmtPct(pctMaiorEmissor) : '—', maiorEmissor ? `${maiorEmissor[0]} · concentração` : 'sem dados', pctMaiorEmissor > 40 ? C.red : C.blue],
-    ['CDI > 100%', fmtPct(pctAcima100CDI), 'percentual da carteira acima de 100% do CDI', pctAcima100CDI > 0 ? C.lime : C.muted],
-    ['Isentos de IR', fmtPct(pctIsentos), 'participação da carteira em produtos isentos', C.blue],
-    ['Taxa média contratada', fmtPct(taxaMedia), 'ponderada pelo valor bruto atual', C.blue],
-    ['Prazo médio', `${Math.round(prazoMedio)} dias`, 'até o vencimento, ponderado', C.blue],
-    ['CDI atual', fmtPct(Number(refTaxas?.cdi) || 0), 'taxa anualizada · base 252', C.blue],
-    ['Selic atual', fmtPct(Number(refTaxas?.selic) || 0), 'taxa de referência anual', C.blue],
-    ['IPCA 12 meses', fmtPct(Number(refTaxas?.ipca) || 0), 'inflação acumulada em 12 meses', C.blue],
+    ['Mês · carteira', retMes === null ? '—' : fmtPct(retMes), cdiMes === null ? 'CDI —' : `CDI ${fmtPct(cdiMes)}`, retMes === null ? C.muted : (retMes >= (cdiMes || 0) ? C.lime : C.red)],
+    ['Ano · carteira', retAno === null ? '—' : fmtPct(retAno), cdiAno === null ? 'CDI —' : `CDI ${fmtPct(cdiAno)}`, retAno === null ? C.muted : (retAno >= (cdiAno || 0) ? C.lime : C.red)],
+    ['Maior emissor', maiorEmissor ? fmtPct(pctMaiorEmissor) : '—', maiorEmissor ? maiorEmissor[0] : 'sem dados', pctMaiorEmissor > 40 ? C.red : C.blue],
   ];
-  return <Panel title="Indicadores da carteira" subtitle="visão consolidada de patrimônio, desempenho, eficiência contra o CDI, concentração e referências macroeconômicas">
+  return <Panel title="Visão geral" subtitle="os principais números, sem excesso de informação">
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10 }}>
       {cards.map(([label, value, sub, accent]) => <div key={label} style={{ background: C.panel2, border: `1px solid ${C.hairline}`, borderRadius: 10, padding: '12px 13px', minHeight: 82 }}>
         <div style={{ color: C.muted, fontSize: 9.5, textTransform: 'uppercase', fontWeight: 800, letterSpacing: .3 }}>{label}</div>
         <div style={{ color: accent, fontFamily: "'IBM Plex Mono', monospace", fontSize: 17, fontWeight: 700, marginTop: 7, lineHeight: 1.1 }}>{value}</div>
         <div style={{ color: C.muted, fontSize: 9.5, marginTop: 5, lineHeight: 1.25 }}>{sub}</div>
       </div>)}
-    </div>
-    <div style={{ marginTop: 10, color: C.muted, fontSize: 10.5, lineHeight: 1.4 }}>
-      A comparação mensal/anual usa os retornos ponderados da carteira e o CDI do mesmo período. Taxa média e prazo médio são ponderados pelo valor bruto atual das aplicações ativas.
     </div>
   </Panel>;
 }
@@ -823,11 +828,11 @@ function InsightsCarteira({ ativos, metricsById, refTaxas, today }) {
   if (oportunidades.length) insights.push({tipo:'oportunidade', titulo:'Produtos isentos com boa equivalência tributável', texto:`${oportunidades.length} aplicação${oportunidades.length>1?'ões':''} isenta${oportunidades.length>1?'s':''} equivale${oportunidades.length>1?'m':''} a pelo menos 110% do CDI em um produto tributável na alíquota aplicável. Compare também prazo, liquidez e risco do emissor.`, cor:C.blue});
   if (!insights.length) insights.push({tipo:'ok', titulo:'Nenhum alerta prioritário', texto:'A carteira não apresenta, pelos critérios atuais, um ponto de revisão que mereça destaque imediato.', cor:C.lime});
   const Row=({inv, tipo})=>{const m=metricsById[inv.id]; return <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid ${C.hairline}`}}><div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{inv.instituicao}</div><div style={{fontSize:10.5,color:C.muted}}>{descricaoTaxa(inv,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}{inv.isentoIR ? ` · equiv. ${fmtPct(m.percentualCDIEquivalente)} CDI` : ''}</div></div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5,color:m.rentLiquidaMensal>=0?C.lime:C.red}}>{fmtPct(m.rentLiquidaMensal)}<div style={{fontFamily:'inherit',fontSize:9,color:C.muted,textAlign:'right'}}>líq./mês</div></div></div>};
-  return <Panel title="Insights e pontos de revisão" subtitle="comparações tributárias e regras objetivas de triagem — não são recomendações automáticas de compra ou venda">
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:12}}>
+  return <Panel title="Insights" subtitle="pontos que merecem revisão; não são recomendações automáticas">
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:10}}> 
       <div style={{background:C.panel2,border:`1px solid ${C.hairline}`,borderRadius:10,padding:'12px 13px'}}>
         <SectionLabel icon={<Icon name="alert" size={13}/>}>Leitura automática</SectionLabel>
-        <div style={{display:'flex',flexDirection:'column',gap:9}}>{insights.slice(0,5).map((x,i)=><div key={i} style={{borderLeft:`3px solid ${x.cor}`,paddingLeft:9}}><div style={{fontSize:12.5,fontWeight:800}}>{x.titulo}</div><div style={{fontSize:10.5,color:C.muted,lineHeight:1.35,marginTop:3}}>{x.texto}</div></div>)}</div>
+        <div style={{display:'flex',flexDirection:'column',gap:9}}>{insights.slice(0,3).map((x,i)=><div key={i} style={{borderLeft:`3px solid ${x.cor}`,paddingLeft:9}}><div style={{fontSize:12.5,fontWeight:800}}>{x.titulo}</div><div style={{fontSize:10.5,color:C.muted,lineHeight:1.35,marginTop:3}}>{x.texto}</div></div>)}</div>
       </div>
       <div style={{background:C.panel2,border:`1px solid ${C.hairline}`,borderRadius:10,padding:'12px 13px'}}>
         <SectionLabel icon={<Icon name="trophy" size={13}/>}>Melhores · líquido/mês</SectionLabel>
@@ -842,116 +847,36 @@ function InsightsCarteira({ ativos, metricsById, refTaxas, today }) {
   </Panel>;
 }
 
-function Dashboard({ porTipo, porIndexador, porInstituicao, calendarioVencimentos, evolucao, proximosVencimentos, metricsById, resgatados, ativos, totais, ganhoLiquido, refTaxas, today }) {
-  const composicaoPie = [
-    { name: 'Aplicado (principal)', value: totais.aplicado, cor: C.blue },
-    { name: 'Rendimento líquido', value: Math.max(ganhoLiquido, 0), cor: C.lime },
-  ];
-  const composicaoTabela = ativos.slice().sort((a, b) => metricsById[b.id].valorAtualLiquido - metricsById[a.id].valorAtualLiquido);
-  const matrizMensal = useMemo(() => buildRentabilidadeMensalMatrix(ativos, refTaxas, today), [ativos, refTaxas, today]);
-  const alocacaoInstituicao = useMemo(() => buildAlocacaoInstituicao(ativos, metricsById), [ativos, metricsById]);
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-    <IndicadoresCarteira ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={refTaxas} today={today} matrizMensal={matrizMensal} />
+function Dashboard({ porInstituicao, proximosVencimentos, metricsById, ativos, totais, ganhoLiquido, refTaxas, today, resgatados }) {
+  const maior = porInstituicao?.[0];
+  return <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+    <IndicadoresCarteira ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={refTaxas} today={today} />
     <InsightsCarteira ativos={ativos} metricsById={metricsById} refTaxas={refTaxas} today={today} />
-    <Panel title="Equivalência tributária" subtitle="quanto um produto tributável precisaria pagar para igualar o retorno líquido de produtos isentos">
-      {ativos.filter(inv=>inv.isentoIR).length === 0 ? <div style={{color:C.muted,fontSize:12}}>Nenhum produto isento cadastrado.</div> : <div style={{display:'flex',flexDirection:'column',gap:8}}>{ativos.filter(inv=>inv.isentoIR).sort((a,b)=>(metricsById[b.id].percentualCDIEquivalente||0)-(metricsById[a.id].percentualCDIEquivalente||0)).map(inv=>{const m=metricsById[inv.id]; return <div key={inv.id} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:12,alignItems:'center',padding:'9px 0',borderBottom:`1px solid ${C.hairline}`}}><div><div style={{fontWeight:700,fontSize:12.5}}>{inv.instituicao}</div><div style={{fontSize:10.5,color:C.muted}}>{descricaoTaxa(inv,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}</div></div><div style={{textAlign:'right'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:700}}>Equiv. CDI</div><div style={{fontFamily:"'IBM Plex Mono', monospace",color:C.blue,fontSize:13}}>{fmtPct(m.percentualCDIEquivalente)}</div></div><div style={{textAlign:'right'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:700}}>Líq./mês</div><div style={{fontFamily:"'IBM Plex Mono', monospace",color:C.lime,fontSize:13}}>{fmtPct(m.rentLiquidaMensal)}</div></div></div>})}</div>}
-    </Panel>
-    <Panel title="Rentabilidade mensal e acumulada" subtitle="retorno líquido da carteira mês a mês, comparado ao CDI do mesmo período — ponderado pelo valor de cada título, sem distorção por aportes">
-      {matrizMensal.anos.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Sem dados suficientes ainda.</p> : (
-        <div className="scrollbar-thin" style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
-          <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>
-            <th style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', fontWeight: 700 }}></th>
-            {MESES_ABREV.map(mm => <th key={mm} style={{ textAlign: 'right', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', fontWeight: 700 }}>{mm}</th>)}
-            <th style={{ textAlign: 'right', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', fontWeight: 700 }}>Ano</th>
-          </tr></thead>
-          <tbody>{matrizMensal.anos.map(ano => {
-            const carteira = matrizMensal.dados[ano].carteira, cdi = matrizMensal.dados[ano].cdi;
-            const acumCarteira = (carteira.filter(v => v !== null).reduce((f, v) => f * (1 + v / 100), 1) - 1) * 100;
-            const acumCDI = (cdi.filter(v => v !== null).reduce((f, v) => f * (1 + v / 100), 1) - 1) * 100;
-            return <React.Fragment key={ano}>
-              <tr style={{ borderTop: `1px solid ${C.hairline}` }}>
-                <td style={{ padding: '5px 8px', fontSize: 12, fontWeight: 700 }}>{ano}</td>
-                {carteira.map((v, i) => <td key={i} style={{ padding: '5px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: v === null ? C.hairline : v >= 0 ? C.lime : C.red }}>{v === null ? '—' : fmtPct(v)}</td>)}
-                <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, fontWeight: 700, color: acumCarteira >= 0 ? C.lime : C.red }}>{fmtPct(acumCarteira)}</td>
-              </tr>
-              <tr>
-                <td style={{ padding: '2px 8px 10px', fontSize: 10.5, color: C.muted }}>CDI</td>
-                {cdi.map((v, i) => <td key={i} style={{ padding: '2px 8px 10px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: C.muted }}>{v === null ? '—' : fmtPct(v)}</td>)}
-                <td style={{ padding: '2px 8px 10px', textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: C.muted }}>{fmtPct(acumCDI)}</td>
-              </tr>
-            </React.Fragment>;
-          })}</tbody>
-        </table></div>
-      )}
-    </Panel>
-    <Panel title="Alocação por instituição" subtitle="total, participação na carteira e rentabilidade líquida acumulada por emissor">
-      <div className="scrollbar-thin" style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
-        <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>{['Instituição', 'Total líquido', '% carteira', 'Rent. líquida'].map(h => <th key={h} style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', whiteSpace: 'nowrap', fontWeight: 700 }}>{h}</th>)}</tr></thead>
-        <tbody>{alocacaoInstituicao.map(a => (
-          <tr key={a.nome} style={{ borderBottom: `1px solid ${C.hairline}` }}>
-            <td style={{ padding: '7px 8px', fontSize: 12.5, fontWeight: 600 }}>{a.nome}</td>
-            <td style={{ padding: '7px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtBRL(a.total)}</td>
-            <td style={{ padding: '7px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtPct(a.pctCarteira)}</td>
-            <td style={{ padding: '7px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: a.rentLiquida >= 0 ? C.lime : C.red }}>{fmtPct(a.rentLiquida)}</td>
-          </tr>
-        ))}</tbody>
-      </table></div>
-    </Panel>
-    <Panel title="Aplicado x rendimento" subtitle="quanto do seu saldo atual é capital investido e quanto é rendimento acumulado">
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-        <PieBlock data={composicaoPie} />
-        <div className="scrollbar-thin" style={{ overflowX: 'auto', maxHeight: 260, overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 380 }}>
-            <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>
-              {['Título', 'Aplicado', 'Rendimento líq.', '% rendimento'].map(h => <th key={h} style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '6px 8px', whiteSpace: 'nowrap', fontWeight: 700 }}>{h}</th>)}
-            </tr></thead>
-            <tbody>{composicaoTabela.map(inv => { const m = metricsById[inv.id]; const rendimento = m.valorAtualLiquido - inv.valorAplicado; const pctRendimento = m.valorAtualLiquido > 0 ? (rendimento / m.valorAtualLiquido) * 100 : 0; return (
-              <tr key={inv.id} style={{ borderBottom: `1px solid ${C.hairline}` }}>
-                <td style={{ padding: '6px 8px', fontSize: 12 }}>{inv.instituicao}</td>
-                <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtBRL(inv.valorAplicado)}</td>
-                <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: rendimento >= 0 ? C.lime : C.red }}>{fmtBRL(rendimento)}</td>
-                <td style={{ padding: '6px 8px', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtPct(pctRendimento)}</td>
-              </tr>
-            ); })}</tbody>
-          </table>
-        </div>
-      </div>
-    </Panel>
-    <Panel title="Evolução do patrimônio" subtitle="soma do valor bruto das aplicações ativas, com projeção diária pela taxa de referência">
-      <MiniLineChart data={evolucao} valueKey="total" labelKey="date" color={C.lime} />
-    </Panel>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-      <Panel title="Distribuição por tipo"><PieBlock data={porTipo} /></Panel>
-      <Panel title="Distribuição por indexador"><PieBlock data={porIndexador} /></Panel>
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:14 }}>
+      <Panel title="Concentração por instituição" subtitle="onde está o seu patrimônio hoje">
+        {porInstituicao.length === 0 ? <div style={{color:C.muted,fontSize:12}}>Sem dados.</div> : <div style={{display:'flex',flexDirection:'column',gap:8}}>{porInstituicao.slice(0,6).map(a=>{
+          const total = porInstituicao.reduce((s,x)=>s+x.valor,0)||1; const pct=a.valor/total*100;
+          return <div key={a.name} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center'}}><div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:650,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.name}</div><div style={{height:5,background:C.panel2,borderRadius:4,marginTop:5,overflow:'hidden'}}><div style={{width:`${Math.min(pct,100)}%`,height:'100%',background:C.blue,borderRadius:4}}/></div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5}}>{fmtPct(pct)}<div style={{fontSize:9.5,color:C.muted}}>{fmtBRL(a.valor)}</div></div></div>})}</div>}
+      </Panel>
+      <Panel title="Próximos vencimentos" subtitle="apenas os que exigem atenção primeiro">
+        {proximosVencimentos.length === 0 ? <div style={{color:C.muted,fontSize:12}}>Nenhuma aplicação ativa.</div> : <div style={{display:'flex',flexDirection:'column',gap:8}}>{proximosVencimentos.slice(0,5).map(inv=>{const m=metricsById[inv.id]; return <div key={inv.id} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center',paddingBottom:8,borderBottom:`1px solid ${C.hairline}`}}><div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:650}}>{inv.instituicao}</div><div style={{fontSize:10.5,color:C.muted}}>vence {fmtData(inv.dataVencimento)} · {m.diasRestantes>=0?`${m.diasRestantes} dias`:'vencida'}</div></div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5}}>{fmtBRL(m.valorAtualBruto)}</div></div>})}</div>}
+      </Panel>
     </div>
-    <Panel title="Concentração por instituição" subtitle="valor atual bruto por emissor">
-      <SimpleBarsHorizontal data={porInstituicao} labelKey="name" valueKey="valor" color={C.blue} />
-    </Panel>
-    <Panel title="Calendário de vencimentos" subtitle="valor bruto a vencer nos próximos 12 meses">
-      <SimpleBarsVertical data={calendarioVencimentos} labelKey="label" valueKey="valor" color={C.lime} />
-    </Panel>
-    <Panel title="Próximos vencimentos">
-      {proximosVencimentos.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Nenhuma aplicação ativa.</p> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {proximosVencimentos.map(inv => { const m = metricsById[inv.id]; return (
-          <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 10 }}>
-            <TipoTag tipo={inv.tipo} />
-            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600, fontSize: 13.5 }}>{inv.instituicao}</div><div style={{ color: C.muted, fontSize: 11.5 }}>vence em {fmtData(inv.dataVencimento)} {m.diasRestantes >= 0 ? `(${m.diasRestantes} dias)` : '(vencida)'}</div></div>
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13.5 }}>{fmtBRL(m.valorAtualBruto)}</div>
-          </div>); })}
-      </div>}
-    </Panel>
-    {resgatados.length > 0 && <Panel title="Resgates realizados">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {resgatados.map(inv => { const ganho = inv.valorLiquidoRecebido - inv.valorAplicado; const rent = inv.valorAplicado > 0 ? (ganho / inv.valorAplicado) * 100 : 0; return (
-          <div key={inv.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 8 }}>
-            <span>{inv.instituicao} <span style={{ color: C.muted }}>· resgatado em {fmtData(inv.dataResgate)}</span></span>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: ganho >= 0 ? C.lime : C.red }}>{fmtBRL(inv.valorLiquidoRecebido)} ({fmtPct(rent)})</span>
-          </div>); })}
+    <Panel title="Resumo da carteira" subtitle="os detalhes completos continuam disponíveis em Ranking e Aplicações">
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))',gap:10}}>
+        {[
+          ['Valor bruto',fmtBRL(totais.bruto),C.text],
+          ['Valor líquido',fmtBRL(totais.liquido),C.lime],
+          ['Ganho líquido',fmtBRL(ganhoLiquido),ganhoLiquido>=0?C.lime:C.red],
+          ['CDI atual',fmtPct(refTaxas.cdi),C.blue],
+          ['Selic',fmtPct(refTaxas.selic),C.blue],
+          ['IPCA 12m',fmtPct(refTaxas.ipca),C.blue],
+        ].map(([l,v,c])=><div key={l} style={{background:C.panel2,borderRadius:9,padding:'10px 11px'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:800}}>{l}</div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:14.5,fontWeight:650,color:c,marginTop:5}}>{v}</div></div>)}
       </div>
-    </Panel>}
+    </Panel>
+    {resgatados.length>0 && <Panel title="Resgates recentes"><div style={{display:'flex',flexDirection:'column',gap:6}}>{resgatados.slice(0,5).map(inv=>{const ganho=inv.valorLiquidoRecebido-inv.valorAplicado; return <div key={inv.id} style={{display:'flex',justifyContent:'space-between',fontSize:12}}><span>{inv.instituicao} · {fmtData(inv.dataResgate)}</span><span style={{fontFamily:"'IBM Plex Mono', monospace",color:ganho>=0?C.lime:C.red}}>{fmtBRL(inv.valorLiquidoRecebido)}</span></div>})}</div></Panel>}
   </div>;
 }
-
 function RankingTab({ ranking, metricsById, refTaxas, rankBy, setRankBy }) {
   const opts = [['rentLiquidaMensal', 'Rentabilidade líquida mensal'], ['rentLiquidaTotal', 'Rentabilidade líquida total'], ['vencimento', 'Vencimento mais próximo'], ['valorAplicado', 'Maior valor aplicado']];
   return <Panel title="Classificação: do melhor para o pior" subtitle="aplicações ativas ordenadas pelo critério escolhido" right={<select style={{ ...inputStyle, width: 230 }} value={rankBy} onChange={e => setRankBy(e.target.value)}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>}>
@@ -1093,6 +1018,9 @@ function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expa
 
 function FormModal({ form, setForm, editingId, formError, refTaxas, investments, onClose, onSave, onTipoChange }) {
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const bancos = [...new Set(investments.map(i => String(i.instituicao || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const bancoExistente = bancos.includes(form.instituicao);
+  function selecionarBanco(e) { const v=e.target.value; if(v==='__novo__') setForm(f=>({...f,instituicao:''})); else setForm(f=>({...f,instituicao:v})); }
   function handleVincularChange(e) {
     const value = e.target.value;
     const base = value ? investments.find(inv => inv.id === value || (inv.groupId || inv.id) === value) : null;
@@ -1112,11 +1040,11 @@ function FormModal({ form, setForm, editingId, formError, refTaxas, investments,
         <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><Icon name="x" size={19} /></button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
-        <Field label="Instituição / emissor"><input style={inputStyle} placeholder="Ex: Banco XP, Rico, Itaú…" value={form.instituicao} onChange={set('instituicao')} /></Field>
+        <Field label="Instituição / emissor" hint="Selecione uma instituição já cadastrada para manter o nome e os consolidados consistentes."><select style={inputStyle} value={bancoExistente ? form.instituicao : '__novo__'} onChange={selecionarBanco}><option value="__novo__">+ Cadastrar nova instituição</option>{bancos.map(b=><option key={b} value={b}>{b}</option>)}</select>{!bancoExistente && <input style={{...inputStyle,marginTop:7}} placeholder="Nome exato da instituição" value={form.instituicao} onChange={set('instituicao')} />}</Field>
         <Field label="Vincular a investimento existente" hint="Agrupa os aportes na visão do aplicativo, mas cada aporte mantém seu próprio cálculo."><select style={inputStyle} value={form.vincularA || ''} onChange={handleVincularChange}><option value="">Não vincular — novo investimento</option>{gruposExistentes.map(({ id, inv }) => <option key={id} value={id}>{inv.instituicao} · {inv.tipo} · {descricaoTaxa(inv, refTaxas)} · vence {fmtData(inv.dataVencimento)}</option>)}</select></Field>
         <Field label="Tipo"><select style={inputStyle} value={form.tipo} onChange={e => onTipoChange(e.target.value)}>{TIPOS.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
         <Field label="Indexador"><select style={inputStyle} value={form.indexador} onChange={set('indexador')}>{INDEXADORES.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
-        <Field label={parametroLabel(form.indexador)} hint={`taxa efetiva calculada: ${fmtPct(efetiva)} a.a.`}><input type="number" style={inputStyle} placeholder="Ex: 110" value={form.parametroValor} onChange={set('parametroValor')} /></Field>
+        <Field label={parametroLabel(form.indexador)} hint={form.indexador === 'Prefixado' ? `DU/252 · taxa fixa efetiva: ${fmtPct(efetiva)} a.a.` : `taxa efetiva calculada: ${fmtPct(efetiva)} a.a.`}><input type="number" style={inputStyle} placeholder="Ex: 110" value={form.parametroValor} onChange={set('parametroValor')} /></Field>
         <Field label="Data de aplicação"><input type="date" style={inputStyle} value={form.dataAplicacao} onChange={set('dataAplicacao')} /></Field>
         <Field label="Data de vencimento"><input type="date" style={inputStyle} value={form.dataVencimento} onChange={set('dataVencimento')} /></Field>
         <Field label="Valor aplicado (bruto)"><input type="number" style={inputStyle} placeholder="0,00" value={form.valorAplicado} onChange={set('valorAplicado')} /></Field>
