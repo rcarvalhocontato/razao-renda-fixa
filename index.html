@@ -7,11 +7,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Razão" />
-<meta name="theme-color" content="#0A0D12" />
+<meta name="theme-color" content="#08111C" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<meta name="razao-version" content="2026-08-24-v10" />
+<meta name="razao-version" content="2026-08-24-v11" />
 <link rel="apple-touch-icon" href="icon.png" />
 <link rel="manifest" href="manifest.json" />
 <style>
@@ -105,7 +105,7 @@ function InstitutionMark({nome,size=36}){
   const b=marcaInstituicao(nome);
   return <div title={nome} style={{width:size,height:size,borderRadius:Math.round(size*.28),background:b.cor+'22',border:`1px solid ${b.cor}55`,color:b.cor,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:Math.max(10,size*.30),letterSpacing:'-.03em',flexShrink:0}}>{b.sigla}</div>;
 }
-const PERIODOS=[['dia','Dia'],['mes','Mês'],['ano','Ano'],['todo','Todo o período']];
+const PERIODOS=[['mes','Mês'],['ano','Ano'],['todo','Todo o período']];
 function inicioPeriodo(periodo,today,investments){
   if(periodo==='dia') return hojeAnteriorISO(today);
   if(periodo==='mes') return `${today.slice(0,8)}01`;
@@ -129,6 +129,39 @@ function retornoCarteiraPeriodo(ativos,inicio,fim,ref){
 function cdiPeriodo(ref,inicio,fim){
   if(ref.historicoCDI?.length){const ultimo=ultimaDataDisponivel(ref.historicoCDI,fim)||inicio; return (fatorAcumulado(ref.historicoCDI,inicio,ultimo,1,true)-1)*100;}
   const du=diasUteisEntre(inicio,fim); return du? (Math.pow(1+ref.cdi/100,du/252)-1)*100:null;
+}
+function retornoCarteiraPeriodoMD(ativos, inicio, fim, ref, today) {
+  if (!ativos.length || !inicio || !fim || inicio >= fim) return null;
+  let valorInicio = 0, valorFim = 0, fluxoPonderado = 0, fluxos = 0;
+  const totalDias = Math.max(diffDays(inicio, fim), 1);
+  ativos.forEach(inv => {
+    if (inv.dataAplicacao > fim) return;
+    const m = calcMetrics(inv, today, ref);
+    const aplicado = Number(inv.valorAplicado) || 0;
+    const entrouNoPeriodo = inv.dataAplicacao >= inicio && inv.dataAplicacao <= fim;
+    if (!entrouNoPeriodo) {
+      const vi = valorProjetadoEm(inv, inicio, ref, today);
+      if (vi > 0) valorInicio += vi;
+    } else {
+      // Aporte feito no início do período é fluxo, não patrimônio inicial.
+      fluxos += aplicado;
+      const peso = Math.max(0, Math.min(1, diffDays(inv.dataAplicacao, fim) / totalDias));
+      fluxoPonderado += aplicado * peso;
+    }
+    valorFim += m.valorAtualBruto || 0;
+  });
+  const denominador = valorInicio + fluxoPonderado;
+  if (!(denominador > 0)) return null;
+  return ((valorFim - valorInicio - fluxos) / denominador) * 100;
+}
+function periodoCDIExato(ref, inicio, fim) {
+  if (ref.historicoCDI?.length) {
+    const ate = ultimaDataDisponivel(ref.historicoCDI, fim);
+    if (!ate || ate <= inicio) return null;
+    return (fatorAcumulado(ref.historicoCDI, inicio, ate, 1, false) - 1) * 100;
+  }
+  const du = diasUteisEntre(inicio, fim);
+  return du ? (Math.pow(1 + ref.cdi / 100, du / 252) - 1) * 100 : null;
 }
 function grupoInstituicoes(ativos,metricsById){
   const map={};
@@ -802,12 +835,12 @@ function App() {
 
   return <div style={{background:C.bg,color:C.text,minHeight:'100vh',fontFamily:"'Inter', sans-serif"}}>
     <header style={{background:C.bg,position:'sticky',top:0,zIndex:10,paddingTop:'env(safe-area-inset-top)'}}>
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'12px 14px 4px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
-        <div style={{display:'flex',alignItems:'center',gap:9}}><div style={{width:30,height:30,borderRadius:9,background:C.lime,color:'#10160A',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>R</div><div><div style={{fontWeight:800,fontSize:14}}>Razão</div><div style={{color:C.muted,fontSize:9.5}}>Renda fixa, sem excesso</div></div></div>
-        <button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'8px 11px',fontWeight:800,fontSize:11.5,cursor:'pointer'}}><Icon name="plus" size={13}/> Nova</button><button onClick={()=>{setBackupMsg('');setShowDados(true)}} style={{background:C.panel2,color:C.text,border:`1px solid ${C.hairline}`,borderRadius:9,padding:'8px 10px',fontWeight:750,fontSize:11.5,cursor:'pointer'}}><Icon name="download" size={13}/> Dados</button>
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'10px 14px 5px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',gap:9}}><img src="icon.png" alt="Razão" style={{width:36,height:36,borderRadius:10,objectFit:'cover',boxShadow:'0 4px 16px rgba(215,168,74,.15)'}}/><div><div style={{fontWeight:850,fontSize:14,letterSpacing:.2}}>Razão</div><div style={{color:'#B58A45',fontSize:9.5,letterSpacing:.7,textTransform:'uppercase'}}>Renda Fixa</div></div></div>
+        <button onClick={openNew} style={{background:'#D7A84A',color:'#11151B',border:'none',borderRadius:10,padding:'8px 11px',fontWeight:800,fontSize:11.5,cursor:'pointer'}}><Icon name="plus" size={13}/> Nova</button><button onClick={()=>{setBackupMsg('');setShowDados(true)}} style={{background:C.panel2,color:C.text,border:`1px solid ${C.hairline}`,borderRadius:9,padding:'8px 10px',fontWeight:750,fontSize:11.5,cursor:'pointer'}}><Icon name="download" size={13}/> Dados</button>
       </div>
       <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTudo} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length}/>
-      <div style={{maxWidth:1100,margin:'0 auto',display:'flex',gap:3,padding:'0 10px 8px',overflowX:'auto'}}>{[['painel','Visão','grid'],['ranking','Análise','listOrdered'],['lista','Aplicações','listChecks']].map(([t,l,ic])=><button key={t} onClick={()=>setTab(t)} style={{flex:'0 0 auto',background:tab===t?C.panel:'transparent',border:'none',borderRadius:8,padding:'7px 11px',color:tab===t?C.lime:C.muted,fontWeight:750,fontSize:11.5,cursor:'pointer',display:'flex',gap:5,alignItems:'center'}}><Icon name={ic} size={13}/>{l}</button>)}</div>
+      <div style={{maxWidth:1100,margin:'0 auto',display:'flex',gap:3,padding:'0 10px 8px',overflowX:'auto'}}>{[['painel','Resumo','grid'],['ranking','Análises','listOrdered'],['lista','Instituições','listChecks']].map(([t,l,ic])=><button key={t} onClick={()=>setTab(t)} style={{flex:'0 0 auto',background:tab===t?C.panel:'transparent',border:'none',borderRadius:8,padding:'7px 11px',color:tab===t?C.lime:C.muted,fontWeight:750,fontSize:11.5,cursor:'pointer',display:'flex',gap:5,alignItems:'center'}}><Icon name={ic} size={13}/>{l}</button>)}</div>
     </header>
     <main style={{maxWidth:1100,margin:'0 auto',padding:'10px 12px 28px'}}>
       {loading?<div style={{color:C.muted,padding:40,textAlign:'center'}}>Carregando…</div>:investments.length===0?<div style={{background:C.panel,borderRadius:14,padding:42,textAlign:'center'}}><Icon name="wallet" size={25} color={C.lime}/><p style={{fontWeight:800}}>Nenhuma aplicação</p><p style={{color:C.muted,fontSize:12}}>Cadastre sua primeira posição.</p><button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'9px 14px',fontWeight:800}}>Adicionar</button></div>:
@@ -914,65 +947,76 @@ function InsightsCarteira({ ativos, metricsById, refTaxas, today }) {
 function Dashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today, investments, setTab }) {
   const [periodo,setPeriodo]=useState('mes');
   const inicio=inicioPeriodo(periodo,today,investments);
-  const retorno=retornoCarteiraPeriodo(ativos,inicio,today,refTaxas);
-  const cdi=cdiPeriodo(refTaxas,inicio,today);
-  const dif=(retorno!==null&&cdi!==null)?retorno-cdi:null;
+  const retorno=retornoCarteiraPeriodoMD(ativos,inicio,today,refTaxas,today);
+  const cdi=periodoCDIExato(refTaxas,inicio,today);
+  const dif=retorno!==null&&cdi!==null?retorno-cdi:null;
+  const pct=retorno!==null&&cdi>0?(retorno/cdi)*100:null;
   const grupos=grupoInstituicoes(ativos,metricsById);
-  const proximos=ativos.slice().sort((a,b)=>a.dataVencimento.localeCompare(b.dataVencimento)).slice(0,5);
-  const top=ativos.slice().sort((a,b)=>(metricsById[b.id].rentLiquidaMensal??-999)-(metricsById[a.id].rentLiquidaMensal??-999)).slice(0,5);
-  const revisao=ativos.slice().sort((a,b)=>(metricsById[a.id].rentLiquidaMensal??999)-(metricsById[b.id].rentLiquidaMensal??999)).slice(0,5);
+  const venc30=ativos.filter(i=>metricsById[i.id].diasRestantes>=0&&metricsById[i.id].diasRestantes<=30);
+  const venc30Val=venc30.reduce((s,i)=>s+metricsById[i.id].valorAtualLiquido,0);
+  const top=ativos.slice().sort((a,b)=>(metricsById[b.id].rentLiquidaMensal??-999)-(metricsById[a.id].rentLiquidaMensal??-999)).slice(0,3);
+  const revisar=ativos.slice().sort((a,b)=>(metricsById[a.id].rentLiquidaMensal??999)-(metricsById[b.id].rentLiquidaMensal??999)).slice(0,3);
+  const maior=grupos[0];
   const insights=[];
-  if(grupos[0]&&grupos[0].liquido/totais.liquido>.4) insights.push({t:'Concentração',d:`${grupos[0].nome} representa ${fmtPct(grupos[0].liquido/totais.liquido*100)} do patrimônio líquido. Vale avaliar diversificação.`,c:C.blue});
-  const venc30=ativos.filter(i=>metricsById[i.id].diasRestantes>=0&&metricsById[i.id].diasRestantes<=30).reduce((s,i)=>s+metricsById[i.id].valorAtualLiquido,0);
-  if(venc30>0) insights.push({t:'Vencimentos próximos',d:`${fmtBRL(venc30)} em aplicações vencem nos próximos 30 dias.`,c:C.lime});
-  const abaixo=ativos.filter(i=>i.indexador==='CDI'&&Number(i.parametroValor)<90);
-  if(abaixo.length) insights.push({t:'Taxas para revisar',d:`${abaixo.length} aplicação(ões) abaixo de 90% do CDI merecem comparação com alternativas.`,c:C.red});
-  if(!insights.length) insights.push({t:'Carteira',d:'Nenhum alerta prioritário encontrado pelas regras atuais.',c:C.lime});
-  return <div style={{display:'flex',flexDirection:'column',gap:14}}>
-    <Panel title="Desempenho" subtitle="retorno ponderado dos títulos no período selecionado" right={<div style={{display:'flex',gap:4,background:C.panel2,borderRadius:9,padding:3}}>{PERIODOS.map(([v,l])=><button key={v} onClick={()=>setPeriodo(v)} style={{border:'none',borderRadius:7,padding:'6px 9px',fontSize:10.5,fontWeight:750,cursor:'pointer',background:periodo===v?C.lime:'transparent',color:periodo===v?'#10160A':C.muted}}>{l}</button>)}</div>}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:9}}>
-        <MetricTile label="Retorno" value={fmtPct(retorno)} accent={retorno>=0?C.lime:C.red}/><MetricTile label="CDI" value={fmtPct(cdi)} /><MetricTile label="Diferença" value={fmtPct(dif)} accent={dif!==null&&dif>=0?C.lime:C.red}/><MetricTile label="% do CDI" value={retorno!==null&&cdi?fmtPct(retorno/cdi*100):'—'} />
+  if(maior&&totais.liquido>0&&maior.liquido/totais.liquido>=.4) insights.push({t:'Concentração',d:`${fmtPct(maior.liquido/totais.liquido*100)} do patrimônio está em um único emissor.`,c:'#F3B55B'});
+  if(venc30Val>0) insights.push({t:'Vencimentos',d:`${fmtBRL(venc30Val)} vencem nos próximos 30 dias.`,c:'#7BA7FF'});
+  const abaixo=ativos.filter(i=>i.indexador==='CDI'&&!i.isentoIR&&Number(i.parametroValor)>0&&Number(i.parametroValor)<90);
+  if(abaixo.length) insights.push({t:'Revisar taxas',d:`${abaixo.length} posição(ões) estão abaixo de 90% do CDI.`,c:'#F06A6A'});
+  if(!insights.length) insights.push({t:'Carteira em ordem',d:'Nenhum ponto prioritário encontrado pelas regras atuais.',c:'#45D6A2'});
+  const logoOnly=(g)=><InstitutionMark nome={g.nome} size={40}/>;
+  return <div style={{display:'flex',flexDirection:'column',gap:12}}>
+    <section style={{background:'linear-gradient(135deg,#102033,#0B1420)',border:'1px solid rgba(215,168,74,.24)',borderRadius:20,padding:'18px 17px',boxShadow:'0 16px 40px rgba(0,0,0,.24)'}}>
+      <div style={{fontSize:10,color:'#D7A84A',fontWeight:800,letterSpacing:1.2,textTransform:'uppercase'}}>Patrimônio líquido</div>
+      <div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:29,fontWeight:700,marginTop:6,letterSpacing:'-.04em'}}>{fmtBRL(totais.liquido)}</div>
+      <div style={{display:'flex',gap:12,marginTop:7,flexWrap:'wrap'}}><span style={{color:ganhoLiquido>=0?'#45D6A2':'#F06A6A',fontSize:12.5,fontWeight:700}}>{ganhoLiquido>=0?'+':''}{fmtBRL(ganhoLiquido)} acumulado</span><span style={{color:C.muted,fontSize:11}}>· {ativos.length} posições</span></div>
+    </section>
+    <section style={{background:C.panel,border:`1px solid ${C.hairline}`,borderRadius:16,padding:13}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:10}}><div><div style={{fontWeight:800,fontSize:13.5}}>Desempenho</div><div style={{fontSize:10,color:C.muted}}>comparação bruta da carteira com o CDI</div></div><div style={{display:'flex',gap:3,background:C.panel2,borderRadius:9,padding:3}}>{PERIODOS.map(([v,l])=><button key={v} onClick={()=>setPeriodo(v)} style={{border:'none',borderRadius:7,padding:'6px 9px',fontSize:10.5,fontWeight:750,cursor:'pointer',background:periodo===v?'#D7A84A':'transparent',color:periodo===v?'#11151B':C.muted}}>{l}</button>)}</div></div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8}}>
+        <MetricTile label="Carteira" value={fmtPct(retorno)} accent={retorno>=0?'#45D6A2':'#F06A6A'}/><MetricTile label="CDI" value={fmtPct(cdi)}/><MetricTile label="Diferença" value={fmtPct(dif)} accent={dif!==null&&dif>=0?'#45D6A2':'#F06A6A'}/><MetricTile label="% do CDI" value={pct===null?'—':fmtPct(pct)} accent={pct!==null&&pct>=100?'#45D6A2':'#F3B55B'}/>
       </div>
-      <div style={{fontSize:10,color:C.muted,marginTop:8}}>Período: {fmtData(inicio)} → {fmtData(today)}. A comparação é ponderada pelos títulos existentes no período e não substitui uma TWR oficial.</div>
-    </Panel>
-    <div style={{display:'grid',gridTemplateColumns:'1.15fr .85fr',gap:14}}>
-      <Panel title="Instituições" subtitle="visão consolidada por emissor">
-        <div style={{display:'flex',flexDirection:'column',gap:8}}>{grupos.slice(0,6).map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid ${C.hairline}`}}><InstitutionMark nome={g.nome} size={34}/><div><div style={{fontSize:12.5,fontWeight:700}}>{g.nome}</div><div style={{fontSize:10,color:C.muted}}>{g.items.length} aplicação(ões) · {fmtPct(g.liquido/totais.liquido*100)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5}}>{fmtBRL(g.liquido)}<div style={{fontSize:9,color:g.rent>=0?C.lime:C.red}}>{fmtPct(g.rent)}</div></div></div>)}</div>
+      <div style={{fontSize:9.5,color:C.muted,marginTop:9}}>Período: {fmtData(inicio)} → {fmtData(today)} · retorno da carteira em base bruta. Entradas durante o período são tratadas como fluxos, evitando penalizar o desempenho por novos aportes.</div>
+    </section>
+    <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:10}}>
+      <Panel title="Instituições" subtitle="consolidado por emissor">
+        <div style={{display:'flex',flexDirection:'column',gap:7}}>{grupos.slice(0,5).map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:9,alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${C.hairline}`}}>{logoOnly(g)}<div><div style={{fontSize:12,fontWeight:800}}>{marcaInstituicao(g.nome).sigla}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} posições · {fmtPct(g.liquido/totais.liquido*100)}</div></div><div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5}}>{fmtBRL(g.liquido)}</div></div>)}</div>
+        {grupos.length>5&&<button onClick={()=>setTab('lista')} style={{marginTop:8,background:'transparent',border:'none',color:'#D7A84A',fontSize:10.5,fontWeight:750,cursor:'pointer'}}>Ver todas</button>}
       </Panel>
-      <Panel title="Leitura rápida" subtitle="pontos para olhar primeiro">
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>{insights.slice(0,4).map((x,i)=><div key={i} style={{borderLeft:`3px solid ${x.c}`,paddingLeft:9}}><div style={{fontSize:11.5,fontWeight:800}}>{x.t}</div><div style={{fontSize:10.5,color:C.muted,lineHeight:1.35,marginTop:2}}>{x.d}</div></div>)}</div>
+      <Panel title="Leitura rápida" subtitle="somente o que merece atenção">
+        <div style={{display:'flex',flexDirection:'column',gap:9}}>{insights.slice(0,3).map((x,i)=><div key={i} style={{display:'grid',gridTemplateColumns:'7px 1fr',gap:9,alignItems:'start'}}><div style={{width:7,height:7,borderRadius:99,background:x.c,marginTop:5}}/><div><div style={{fontSize:11.5,fontWeight:800}}>{x.t}</div><div style={{fontSize:10,color:C.muted,lineHeight:1.35,marginTop:2}}>{x.d}</div></div></div>)}</div>
       </Panel>
-    </div>
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-      <Panel title="Melhores líquidos / mês"><CompactInvestmentTable items={top} metricsById={metricsById} refTaxas={refTaxas} mode="best"/></Panel>
-      <Panel title="Revisar primeiro"><CompactInvestmentTable items={revisao} metricsById={metricsById} refTaxas={refTaxas} mode="review"/></Panel>
-    </div>
-    <Panel title="Próximos vencimentos"><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:8}}>{proximos.map(i=>{const m=metricsById[i.id];return <div key={i.id} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:8,alignItems:'center',background:C.panel2,borderRadius:9,padding:'8px 9px'}}><InstitutionMark nome={i.instituicao} size={28}/><div><div style={{fontSize:11.5,fontWeight:700}}>{i.tituloTesouro||i.tipo}</div><div style={{fontSize:9.5,color:C.muted}}>{i.instituicao} · {fmtData(i.dataVencimento)}</div></div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5}}>{fmtBRL(m.valorAtualLiquido)}</div></div>})}</div></Panel>
+    </section>
+    <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:10}}>
+      <Panel title="Melhores" subtitle="rentabilidade líquida equivalente / mês"><CompactInvestmentTable items={top} metricsById={metricsById} mode="best" refTaxas={refTaxas}/></Panel>
+      <Panel title="Revisar primeiro" subtitle="menor rentabilidade líquida equivalente / mês"><CompactInvestmentTable items={revisar} metricsById={metricsById} mode="review" refTaxas={refTaxas}/></Panel>
+    </section>
+    <Panel title="Próximos vencimentos"><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:7}}>{ativos.slice().sort((a,b)=>a.dataVencimento.localeCompare(b.dataVencimento)).slice(0,4).map(i=>{const m=metricsById[i.id];return <div key={i.id} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:8,alignItems:'center',padding:'8px 0',borderBottom:`1px solid ${C.hairline}`}}><InstitutionMark nome={i.instituicao} size={30}/><div><div style={{fontSize:10.5,fontWeight:750}}>{i.tituloTesouro||i.tipo}</div><div style={{fontSize:9,color:C.muted}}>{fmtData(i.dataVencimento)}</div></div><div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:10.5}}>{fmtBRL(m.valorAtualLiquido)}</div></div>})}</div></Panel>
   </div>;
 }
 function MetricTile({label,value,accent}){return <div style={{background:C.panel2,borderRadius:9,padding:'10px 11px'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:800}}>{label}</div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:15,fontWeight:700,color:accent||C.text,marginTop:4}}>{value}</div></div>}
 function CompactInvestmentTable({items,metricsById,mode,refTaxas}){return <div>{items.map(i=>{const m=metricsById[i.id];return <div key={i.id} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:9,alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${C.hairline}`}}><InstitutionMark nome={i.instituicao} size={28}/><div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{i.tituloTesouro||i.tipo} · {i.instituicao}</div><div style={{fontSize:9.5,color:C.muted}}>{descricaoTaxa(i,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:m.rentLiquidaMensal>=0?(mode==='best'?C.lime:C.text):C.red}}>{fmtPct(m.rentLiquidaMensal)}<div style={{fontSize:8.5,color:C.muted}}>líq./mês</div></div></div>})}</div>}
 
-function RankingTab({ investments, ativos, metricsById, refTaxas, setTab }){
-  const [filtroInst,setFiltroInst]=useState('Todas as instituições'); const [filtroTipo,setFiltroTipo]=useState('Todos os tipos'); const [ordenacao,setOrdenacao]=useState('rentLiquidaMensal'); const [periodo,setPeriodo]=useState('mes');
-  const hoje=todayStr(); const inicio=inicioPeriodo(periodo,hoje,investments); const cdi=cdiPeriodo(refTaxas,inicio,hoje);
+function RankingTab({ investments, ativos, metricsById, refTaxas }){
+  const [filtroInst,setFiltroInst]=useState('Todas');
+  const [filtroTipo,setFiltroTipo]=useState('Todos');
+  const [ordenacao,setOrdenacao]=useState('rent');
+  const [periodo,setPeriodo]=useState('mes');
+  const hoje=todayStr(); const inicio=inicioPeriodo(periodo,hoje,investments); const cdi=periodoCDIExato(refTaxas,inicio,hoje);
   const insts=[...new Map(ativos.map(i=>[normalizarInstituicao(i.instituicao),i.instituicao])).values()].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const tipos=[...new Set(ativos.map(i=>i.tipo))].sort();
-  const rows=ativos.filter(i=>(filtroInst==='Todas as instituições'||i.instituicao===filtroInst)&&(filtroTipo==='Todos os tipos'||i.tipo===filtroTipo)).slice().sort((a,b)=>ordenacao==='rentLiquidaMensal'?(metricsById[b.id].rentLiquidaMensal??-999)-(metricsById[a.id].rentLiquidaMensal??-999):ordenacao==='valor'?(metricsById[b.id].valorAtualLiquido-metricsById[a.id].valorAtualLiquido):a.dataVencimento.localeCompare(b.dataVencimento));
+  const rows=ativos.filter(i=>(filtroInst==='Todas'||i.instituicao===filtroInst)&&(filtroTipo==='Todos'||i.tipo===filtroTipo)).slice().sort((a,b)=>ordenacao==='rent'?(metricsById[b.id].rentLiquidaMensal??-999)-(metricsById[a.id].rentLiquidaMensal??-999):ordenacao==='valor'?metricsById[b.id].valorAtualLiquido-metricsById[a.id].valorAtualLiquido:a.dataVencimento.localeCompare(b.dataVencimento));
+  const retorno=retornoCarteiraPeriodoMD(rows,inicio,hoje,refTaxas,hoje); const dif=retorno!==null&&cdi!==null?retorno-cdi:null; const pct=retorno!==null&&cdi>0?retorno/cdi*100:null;
   const grupos=grupoInstituicoes(rows,metricsById);
-  return <div style={{display:'flex',flexDirection:'column',gap:14}}>
-    <Panel title="Comparação" subtitle="use os filtros para reduzir a carteira antes de comparar">
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8}}><select style={inputStyle} value={periodo} onChange={e=>setPeriodo(e.target.value)}>{PERIODOS.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><select style={inputStyle} value={filtroInst} onChange={e=>setFiltroInst(e.target.value)}><option>Todas as instituições</option>{insts.map(x=><option key={x}>{x}</option>)}</select><select style={inputStyle} value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}><option>Todos os tipos</option>{tipos.map(x=><option key={x}>{x}</option>)}</select><select style={inputStyle} value={ordenacao} onChange={e=>setOrdenacao(e.target.value)}><option value="rentLiquidaMensal">Melhor líquido / mês</option><option value="valor">Maior valor</option><option value="vencimento">Vencimento</option></select></div><div style={{fontSize:10,color:C.muted,marginTop:8}}>Período: {fmtData(inicio)} → {fmtData(hoje)} · CDI: {fmtPct(cdi)}</div>
+  return <div style={{display:'flex',flexDirection:'column',gap:11}}>
+    <Panel title="Análises" subtitle="compare mês, ano ou todo o período — sem a visão diária">
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:7}}><select style={inputStyle} value={periodo} onChange={e=>setPeriodo(e.target.value)}>{PERIODOS.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><select style={inputStyle} value={filtroInst} onChange={e=>setFiltroInst(e.target.value)}><option>Todas</option>{insts.map(x=><option key={x}>{x}</option>)}</select><select style={inputStyle} value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}><option>Todos</option>{tipos.map(x=><option key={x}>{x}</option>)}</select><select style={inputStyle} value={ordenacao} onChange={e=>setOrdenacao(e.target.value)}><option value="rent">Rent. líquida / mês</option><option value="valor">Maior patrimônio</option><option value="vencimento">Vencimento</option></select></div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7,marginTop:9}}><MetricTile label="Carteira" value={fmtPct(retorno)} accent={retorno!==null&&retorno>=0?'#45D6A2':'#F06A6A'}/><MetricTile label="CDI" value={fmtPct(cdi)}/><MetricTile label="Diferença" value={fmtPct(dif)} accent={dif!==null&&dif>=0?'#45D6A2':'#F06A6A'}/><MetricTile label="% CDI" value={pct===null?'—':fmtPct(pct)} accent={pct!==null&&pct>=100?'#45D6A2':'#F3B55B'}/></div>
+      <div style={{fontSize:9.5,color:C.muted,marginTop:8}}>Período: {fmtData(inicio)} → {fmtData(hoje)} · comparação bruta com CDI · {rows.length} posição(ões).</div>
     </Panel>
-    <Panel title="Consolidado por instituição" subtitle="uma instituição pode ter vários títulos e aportes; aqui eles aparecem somados">
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:9}}>{grupos.map(g=><div key={g.key} style={{background:C.panel2,borderRadius:10,padding:11,display:'grid',gridTemplateColumns:'auto 1fr auto',gap:9,alignItems:'center'}}><InstitutionMark nome={g.nome} size={34}/><div><div style={{fontWeight:750,fontSize:12.5}}>{g.nome}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} título(s) · {fmtPct(g.liquido/(grupos.reduce((s,x)=>s+x.liquido,0)||1)*100)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:12}}>{fmtBRL(g.liquido)}<div style={{fontSize:9,color:g.rent>=0?C.lime:C.red}}>{fmtPct(g.rent)}</div></div></div>)}</div>
-    </Panel>
-    <Panel title="Tabela comparativa" subtitle={`${rows.length} aplicação(ões) no filtro atual`}>
-      <div className="scrollbar-thin" style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',minWidth:760}}><thead><tr>{['','Aplicação','Taxa','Retorno período','Líquido/mês','% CDI líq.','Atual líquido','Vencimento'].map(h=><th key={h} style={{textAlign:'left',color:C.muted,fontSize:9.5,textTransform:'uppercase',padding:'7px 8px',borderBottom:`1px solid ${C.hairline}`,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead><tbody>{rows.map((i,idx)=>{const m=metricsById[i.id];return <tr key={i.id}><td style={{padding:'8px'}}><InstitutionMark nome={i.instituicao} size={28}/></td><td style={{padding:'8px',fontSize:11.5}}><b>{i.tituloTesouro||i.tipo}</b><div style={{fontSize:9.5,color:C.muted}}>{i.instituicao}</div></td><td style={{padding:'8px',fontSize:10.5,color:C.muted}}>{descricaoTaxa(i,refTaxas)}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:(retornoPeriodoInvestimento(i,inicio,hoje,refTaxas)??0)>=0?C.lime:C.red}}>{fmtPct(retornoPeriodoInvestimento(i,inicio,hoje,refTaxas))}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:m.rentLiquidaMensal>=0?C.lime:C.red}}>{fmtPct(m.rentLiquidaMensal)}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5}}>{m.pctCDILiquido==null?'—':fmtPct(m.pctCDILiquido)}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5}}>{fmtBRL(m.valorAtualLiquido)}</td><td style={{padding:'8px',fontSize:10.5}}>{fmtData(i.dataVencimento)}</td></tr>})}</tbody></table></div>
-    </Panel>
+    <Panel title="Por instituição" subtitle="consolidação do filtro atual"><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:7}}>{grupos.map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:8,alignItems:'center',background:C.panel2,borderRadius:11,padding:'9px 10px'}}><InstitutionMark nome={g.nome} size={32}/><div><div style={{fontSize:11.5,fontWeight:800}}>{marcaInstituicao(g.nome).sigla}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} posições</div></div><div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5}}>{fmtBRL(g.liquido)}</div></div>)}</div></Panel>
+    <Panel title="Comparativo" subtitle="rentabilidade líquida mensal e posição atual"><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',minWidth:650}}><thead><tr>{['','Aplicação','Líquido/mês','% CDI líq.','Atual líquido','Vencimento'].map(h=><th key={h} style={{textAlign:'left',color:C.muted,fontSize:9,textTransform:'uppercase',padding:'7px 6px',borderBottom:`1px solid ${C.hairline}`,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead><tbody>{rows.map(i=>{const m=metricsById[i.id];return <tr key={i.id}><td style={{padding:'7px 6px'}}><InstitutionMark nome={i.instituicao} size={27}/></td><td style={{padding:'7px 6px',fontSize:10.5}}><b>{i.tituloTesouro||i.tipo}</b><div style={{fontSize:8.8,color:C.muted}}>{marcaInstituicao(i.instituicao).sigla} · {descricaoTaxa(i,refTaxas)}</div></td><td style={{padding:'7px 6px',fontFamily:"'IBM Plex Mono',monospace",fontSize:10.5,color:m.rentLiquidaMensal>=0?'#45D6A2':'#F06A6A'}}>{fmtPct(m.rentLiquidaMensal)}</td><td style={{padding:'7px 6px',fontFamily:"'IBM Plex Mono',monospace",fontSize:10.5}}>{m.pctCDILiquido==null?'—':fmtPct(m.pctCDILiquido)}</td><td style={{padding:'7px 6px',fontFamily:"'IBM Plex Mono',monospace",fontSize:10.5}}>{fmtBRL(m.valorAtualLiquido)}</td><td style={{padding:'7px 6px',fontSize:9.5}}>{fmtData(i.dataVencimento)}</td></tr>})}</tbody></table></div></Panel>
   </div>;
 }
-
 function exportarCSV(lista, metricsById, refTaxas) {
   const header = ['Grupo', 'Instituição', 'Tipo', 'Indexador', 'Taxa contratada', 'Carteira', 'Data aplicação', 'Data vencimento', 'Valor aplicado', 'Valor atual bruto', 'Valor atual líquido', 'Rent. líquida mensal %', 'Rent. líquida total %', '% do CDI líquido', 'Status'];
   const linhas = lista.map(inv => { const m = metricsById[inv.id]; return [grupoIdDe(inv), inv.instituicao, inv.tipo, inv.indexador, descricaoTaxa(inv, refTaxas), inv.carteira || '', fmtData(inv.dataAplicacao), fmtData(inv.dataVencimento), inv.valorAplicado.toFixed(2), m.valorAtualBruto.toFixed(2), m.valorAtualLiquido.toFixed(2), m.rentLiquidaMensal !== null ? m.rentLiquidaMensal.toFixed(2) : '', m.rentLiquidaTotal.toFixed(2), m.pctCDILiquido !== null ? m.pctCDILiquido.toFixed(1) : '', inv.status].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'); });
