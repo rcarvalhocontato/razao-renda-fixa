@@ -11,11 +11,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<meta name="razao-version" content="2026-08-14-v5" />
+<meta name="razao-version" content="2026-08-24-v9" />
 <link rel="apple-touch-icon" href="icon.png" />
 <link rel="manifest" href="manifest.json" />
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; }
   html { background:#0A0D12; }
   body {
@@ -84,6 +83,59 @@ const TIPO_META = {
 };
 const INDEXADOR_COR = { 'CDI': C.lime, 'IPCA+': C.blue, 'Prefixado': C.slate, 'SELIC': C.red, 'Outro': C.muted };
 const IOF_TABLE = [96,93,90,86,83,80,76,73,70,66,63,60,56,53,50,46,43,40,36,33,30,26,23,20,16,13,10,6,3,0];
+const BANK_BRANDS = [
+  ['BANCO DO BRASIL','BB','#F7D117'], ['BTG PACTUAL','BTG','#00A86B'], ['BTG','BTG','#00A86B'],
+  ['ITAÚ','IT','#EC7000'], ['ITAU','IT','#EC7000'], ['BRADESCO','BD','#CC092F'], ['SANTANDER','SAN','#EC0000'],
+  ['CAIXA','CX','#005CA9'], ['NUBANK','NU','#820AD1'], ['INTER','IN','#FF7A00'], ['XP','XP','#151515'],
+  ['RICO','RI','#F4B400'], ['SAFRA','SA','#1E3A8A'], ['DAYCOVAL','DAY','#00A98F'], ['BMG','BMG','#0B5CAB'],
+  ['PICPAY','PP','#21C25E'], ['PAGBANK','PG','#00AEEF'], ['MERCADO PAGO','MP','#00B1EA'], ['GENIAL','GE','#00A3FF'],
+];
+function normalizarInstituicao(nome){
+  return String(nome||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim()
+    .replace(/\bS\.?\s*A\.?\b/g,'').replace(/\bSA\b/g,'').replace(/\bBANCO\b/g,'').replace(/\bBANK\b/g,'').replace(/\s+/g,' ').trim();
+}
+function marcaInstituicao(nome){
+  const n=normalizarInstituicao(nome);
+  const hit=BANK_BRANDS.find(([key])=>n.includes(normalizarInstituicao(key)));
+  if(hit) return {sigla:hit[1], cor:hit[2]};
+  const parts=String(nome||'').trim().split(/\s+/).filter(Boolean);
+  return {sigla:(parts.slice(0,2).map(x=>x[0]).join('')||'R').slice(0,3).toUpperCase(), cor:C.blue};
+}
+function InstitutionMark({nome,size=36}){
+  const b=marcaInstituicao(nome);
+  return <div title={nome} style={{width:size,height:size,borderRadius:Math.round(size*.28),background:b.cor+'22',border:`1px solid ${b.cor}55`,color:b.cor,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:Math.max(10,size*.30),letterSpacing:'-.03em',flexShrink:0}}>{b.sigla}</div>;
+}
+const PERIODOS=[['dia','Dia'],['mes','Mês'],['ano','Ano'],['todo','Todo o período']];
+function inicioPeriodo(periodo,today,investments){
+  if(periodo==='dia') return hojeAnteriorISO(today);
+  if(periodo==='mes') return `${today.slice(0,8)}01`;
+  if(periodo==='ano') return `${today.slice(0,4)}-01-01`;
+  const datas=investments.map(i=>i.dataAplicacao).filter(Boolean).sort(); return datas[0]||today;
+}
+function hojeAnteriorISO(iso){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()-1); return isoDate(d); }
+function retornoPeriodoInvestimento(inv,inicio,fim,ref){
+  if(!inv || !inicio || !fim || inv.dataAplicacao>fim) return null;
+  const inicioCalc=inv.dataAplicacao>inicio?inv.dataAplicacao:inicio;
+  const valorIni=valorProjetadoEm(inv,inicioCalc,ref,fim);
+  const valorFim=valorProjetadoEm(inv,fim,ref,fim);
+  if(!(valorIni>0)) return null;
+  return (valorFim/valorIni-1)*100;
+}
+function retornoCarteiraPeriodo(ativos,inicio,fim,ref){
+  let peso=0, retorno=0;
+  ativos.forEach(inv=>{const r=retornoPeriodoInvestimento(inv,inicio,fim,ref); if(r===null)return; const ini=valorProjetadoEm(inv,inv.dataAplicacao>inicio?inv.dataAplicacao:inicio,ref,fim); if(ini>0){peso+=ini;retorno+=ini*r;}});
+  return peso?retorno/peso:null;
+}
+function cdiPeriodo(ref,inicio,fim){
+  if(ref.historicoCDI?.length){const ultimo=ultimaDataDisponivel(ref.historicoCDI,fim)||inicio; return (fatorAcumulado(ref.historicoCDI,inicio,ultimo,1,true)-1)*100;}
+  const du=diasUteisEntre(inicio,fim); return du? (Math.pow(1+ref.cdi/100,du/252)-1)*100:null;
+}
+function grupoInstituicoes(ativos,metricsById){
+  const map={};
+  ativos.forEach(inv=>{const key=normalizarInstituicao(inv.instituicao); if(!map[key]) map[key]={key,nome:inv.instituicao,items:[],bruto:0,liquido:0,aplicado:0}; const g=map[key],m=metricsById[inv.id]; g.items.push(inv); g.bruto+=m.valorAtualBruto;g.liquido+=m.valorAtualLiquido;g.aplicado+=inv.valorAplicado;});
+  return Object.values(map).map(g=>({...g,ganho:g.liquido-g.aplicado,rent:g.aplicado?(g.liquido/g.aplicado-1)*100:0})).sort((a,b)=>b.liquido-a.liquido);
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Ícones (SVG próprios — evita depender de mais um pacote externo)    */
@@ -233,7 +285,13 @@ function calcMetrics(inv, today, ref) {
   let valorAtualBruto, precisao = 'estimado';
   const ultimaDataCDI = ultimaDataDisponivel(ref.historicoCDI, today);
   const ultimaDataSelic = ultimaDataDisponivel(ref.historicoSelic, today);
-  if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
+  if (inv.tipo === 'Tesouro Direto' && Number(inv.valorAtualBrutoManual) > 0) {
+    valorAtualBruto = Number(inv.valorAtualBrutoManual);
+    precisao = 'mercado-informado';
+  } else if (inv.tipo === 'Tesouro Direto' && Number(inv.quantidade) > 0 && Number(inv.precoUnitarioAtual) > 0) {
+    valorAtualBruto = Number(inv.quantidade) * Number(inv.precoUnitarioAtual);
+    precisao = 'mercado-unitario';
+  } else if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
     const dataRendimento = ultimaDataCDI || ancoraData;
     valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataRendimento, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
     // O CDI diário do SGS pode aparecer com defasagem de um dia útil.
@@ -270,7 +328,8 @@ function calcMetrics(inv, today, ref) {
   const rentLiquidaMensal = diasCorridos > 0 ? (Math.pow(Math.max(valorAtualLiquido, 0.0001) / inv.valorAplicado, 30 / diasCorridos) - 1) * 100 : null;
 
   const duRestantes = diasUteisEntre(today, inv.dataVencimento);
-  const valorEstBrutoVenc = valorAtualBruto * Math.pow(1 + taxaAnual / 100, Math.max(duRestantes, 0) / 252);
+  const valorBaseProjecao = inv.tipo === 'Tesouro Direto' ? inv.valorAplicado : valorAtualBruto;
+  const valorEstBrutoVenc = valorBaseProjecao * Math.pow(1 + taxaAnual / 100, Math.max(duRestantes, 0) / 252);
   const ganhoEstVenc = valorEstBrutoVenc - inv.valorAplicado;
   const diasAteVencimento = Math.max(diffDays(inv.dataAplicacao, inv.dataVencimento), 0);
   const iofAliqVenc = diasAteVencimento < 30 ? aliquotaIOFPorDias(diasAteVencimento) : 0;
@@ -278,14 +337,15 @@ function calcMetrics(inv, today, ref) {
   const ganhoAposIOFVenc = ganhoEstVenc - iofValorVenc;
   const aliqIRVenc = inv.isentoIR ? 0 : (inv.aliquotaIRManual !== '' && inv.aliquotaIRManual != null ? Number(inv.aliquotaIRManual) : aliquotaIRPorDias(diasTotais));
   const irValorVenc = ganhoAposIOFVenc > 0 ? ganhoAposIOFVenc * (aliqIRVenc / 100) : 0;
-  const valorEstLiquidoVenc = valorEstBrutoVenc - iofValorVenc - irValorVenc;
+  const custodiaVenc = inv.tipo === 'Tesouro Direto' ? valorEstBrutoVenc * (Number(inv.taxaCustodiaB3 || 0.20) / 100) * (Math.max(duRestantes,0) / 252) : 0;
+  const valorEstLiquidoVenc = valorEstBrutoVenc - iofValorVenc - irValorVenc - custodiaVenc;
 
   const cdiMensal = (Math.pow(1 + ref.cdi / 100, 21 / 252) - 1) * 100;
   const pctCDIBruto = cdiMensal !== 0 && rentBrutaMensal !== null ? (rentBrutaMensal / cdiMensal) * 100 : null;
   const pctCDILiquido = cdiMensal !== 0 && rentLiquidaMensal !== null ? (rentLiquidaMensal / cdiMensal) * 100 : null;
 
   return { diasCorridos, diasTotais, diasRestantes, valorAtualBruto, ganhoBruto, iofAliq, iofValor, aliqIR, irValor,
-    valorAtualLiquido, valorEstBrutoVenc, ganhoEstVenc, iofAliqVenc, iofValorVenc, aliqIRVenc, irValorVenc, valorEstLiquidoVenc, taxaAnual, projetado, ancoraData, precisao,
+    valorAtualLiquido, valorEstBrutoVenc, ganhoEstVenc, iofAliqVenc, iofValorVenc, aliqIRVenc, irValorVenc, valorEstLiquidoVenc, custodiaVenc, taxaAnual, projetado, ancoraData, precisao,
     rentBrutaTotal, rentLiquidaTotal, rentBrutaMensal, rentLiquidaMensal, pctCDIBruto, pctCDILiquido, ultimaDataRendimento: inv.indexador === 'CDI' ? ultimaDataCDI : inv.indexador === 'SELIC' ? ultimaDataSelic : today, aliquotaComparacao: taxaComparacaoIR(inv, diasCorridos), taxaAnualTributavelEquivalente: taxaAnualTributavelEquivalente(inv, ref, diasCorridos), percentualCDIEquivalente: percentualCDIEquivalente(inv, ref, diasCorridos) };
 }
 function buildEvolutionSeries(list, metricsById, today) {
@@ -325,7 +385,8 @@ function valorProjetadoEm(inv, dataAlvo, ref, today) {
     if (diasProv > 0) valor *= Math.pow(1 + taxaAnualEfetiva(inv, ref) / 100, diasProv / 252);
     return valor;
   }
-  const du = diasUteisEntre(ancoraData, dataAlvo);
+  let du = diasUteisEntre(ancoraData, dataAlvo);
+  if (inv.indexador === 'Prefixado' && ancoraData === inv.dataAplicacao && ehDiaUtilMercado(new Date(ancoraData+'T00:00:00'))) du += 1;
   const taxaAnual = taxaAnualEfetiva(inv, ref);
   return ancoraValor * Math.pow(1 + taxaAnual / 100, Math.max(du, 0) / 252);
 }
@@ -409,7 +470,7 @@ async function fetchTaxasBCB() {
   return Object.fromEntries(entries);
 }
 
-const emptyForm = { instituicao: '', tipo: 'CDB', indexador: 'CDI', parametroValor: '', dataAplicacao: '', dataVencimento: '', valorAplicado: '', liquidez: 'No vencimento', isentoIR: false, aliquotaIRManual: '', taxaOverrideAnual: '', carteira: '', observacoes: '', vincularA: '' };
+const emptyForm = { instituicao: '', tipo: 'CDB', indexador: 'CDI', parametroValor: '', dataAplicacao: '', dataVencimento: '', valorAplicado: '', liquidez: 'No vencimento', isentoIR: false, aliquotaIRManual: '', taxaOverrideAnual: '', carteira: '', observacoes: '', vincularA: '', tituloTesouro: '', quantidade: '', precoUnitarioCompra: '', precoUnitarioAtual: '', valorAtualBrutoManual: '', taxaCustodiaB3: '0.20', tesouroCupom: 'Não' };
 const defaultRef = {
   cdi: 14.90, selic: 14.00, ipca: 4.64,
   dataCDI: '2026-08-11', dataSelic: '2026-08-11', dataIPCA: '2026-06-01',
@@ -435,7 +496,7 @@ function MaturityBar({ diasCorridos, diasTotais, vencida }) {
 function Field({ label, children, hint }) {
   return <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}><span style={{ color: C.muted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700 }}>{label}</span>{children}{hint && <span style={{ color: C.muted, fontSize: 11 }}>{hint}</span>}</label>;
 }
-const inputStyle = { background: C.bg, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '9px 11px', color: C.text, fontFamily: "'Inter', sans-serif", fontSize: 13.5, width: '100%', outline: 'none' };
+const inputStyle = { background: C.bg, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '9px 11px', color: C.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", fontSize: 13.5, width: '100%', outline: 'none' };
 function StatCard({ label, value, delta, sub, accent }) {
   return <div style={{ background: C.panel, borderRadius: 16, padding: '16px 18px', boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
     <div style={{ color: C.muted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, fontWeight: 700 }}>{label}</div>
@@ -526,42 +587,13 @@ function Hero({ liquido, deltaPct, ganho }) {
     <div style={{ color: C.muted, fontSize: 12.5, marginTop: 6 }}>Ganho líquido acumulado: <span style={{ color: ganho >= 0 ? C.lime : C.red, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtBRL(ganho)}</span></div>
   </div>;
 }
-function TaxasBar({ refTaxas, status, onRefresh, onSaveManual, historicoStatus, historicoCDICount, historicoSelicCount }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(refTaxas);
-  useEffect(() => { setDraft(refTaxas); }, [refTaxas]);
-  const dataReferenciaDiaria = refTaxas.dataCDI || refTaxas.atualizado || todayStr();
-  const diasDesatualizado = Math.max(diffDays(dataReferenciaDiaria, todayStr()), 0);
-  const desatualizado = status !== 'carregando' && diasDesatualizado > 3;
-  const dotCor = desatualizado ? '#E8A33D' : status === 'conectado' ? C.lime : status === 'carregando' ? C.blue : status === 'manual' ? C.slate : C.red;
-  const label = desatualizado ? `Taxas há ${diasDesatualizado} dias sem checar — toque para atualizar`
-    : status === 'conectado' ? 'Banco Central · atualizado' : status === 'carregando' ? 'Atualizando taxas do Banco Central…' : status === 'manual' ? 'Valores mantidos manualmente' : 'Conexão automática indisponível aqui';
-  const totalPregoes = (historicoCDICount || 0) + (historicoSelicCount || 0);
-  const histLabel = historicoStatus === 'carregando' ? 'baixando o histórico diário do CDI/Selic…'
-    : historicoStatus === 'ok' ? `histórico diário carregado (${totalPregoes} pregões) — CDI/Selic compostos dia a dia até o último pregão disponível, aplicando o % contratado à taxa de cada pregão`
-    : historicoStatus === 'erro' ? 'não consegui baixar o histórico diário — usando taxa atual constante como estimativa' : null;
-  return <div style={{ maxWidth: 1152, margin: '16px auto 0', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', padding: '4px 4px 12px' }}>
-    <button onClick={onRefresh} title="Tentar buscar novamente no Banco Central" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotCor }} />
-      <span style={{ fontSize: 11, color: C.mutedLight }}>{label}</span>
-      <span style={status === 'carregando' ? { display: 'inline-flex', animation: 'spin 0.9s linear infinite' } : { display: 'inline-flex' }}><Icon name="refresh" size={12} color={C.muted} /></span>
-    </button>
-    <div style={{ width: 1, height: 14, background: C.hairline }} />
-    {!editing ? <>
-      {[['CDI', refTaxas.cdi], ['Selic', refTaxas.selic], ['IPCA 12m', refTaxas.ipca]].map(([lbl, v]) => (
-        <div key={lbl} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}><span style={{ color: C.muted, fontSize: 11 }}>{lbl}</span><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 600 }}>{fmtPct(v)}</span></div>
-      ))}
-      <span style={{ color: C.muted, fontSize: 10.5 }}>· ref. CDI {fmtData(refTaxas.dataCDI)} · Selic {fmtData(refTaxas.dataSelic)} · IPCA {fmtData(refTaxas.dataIPCA)}</span>
-      <span style={{ color: C.muted, fontSize: 10.5 }}>· CDI anualizado (base 252)</span>
-      <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 11, textDecoration: 'underline', cursor: 'pointer' }}>editar</button>
-    </> : <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-      {[['cdi', 'CDI'], ['selic', 'Selic'], ['ipca', 'IPCA 12m']].map(([k, lbl]) => (
-        <div key={k}><div style={{ color: C.muted, fontSize: 10 }}>{lbl}</div><input type="number" style={{ ...inputStyle, width: 90, padding: '4px 8px' }} value={draft[k]} onChange={e => setDraft(d => ({ ...d, [k]: e.target.value }))} /></div>
-      ))}
-      <button onClick={() => { onSaveManual({ ...draft, cdi: Number(draft.cdi), selic: Number(draft.selic), ipca: Number(draft.ipca), dataCDI: todayStr(), dataSelic: todayStr(), dataIPCA: todayStr(), atualizado: todayStr(), fonte: 'manual' }); setEditing(false); }} style={{ background: C.lime, border: 'none', color: '#10160A', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Salvar</button>
-      <button onClick={() => { setDraft(refTaxas); setEditing(false); }} style={{ background: 'none', border: `1px solid ${C.hairline}`, color: C.muted, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
-    </div>}
-    {histLabel && <div style={{ width: '100%', color: C.muted, fontSize: 10.5 }}>{histLabel}</div>}
+function TaxasBar({ refTaxas, status, onRefresh }){
+  const data=refTaxas.dataCDI||refTaxas.atualizado||todayStr();
+  const cor=status==='conectado'?C.lime:status==='carregando'?C.blue:status==='manual'?C.slate:C.red;
+  return <div style={{maxWidth:1100,margin:'6px auto 0',padding:'0 12px 8px',display:'flex',alignItems:'center',gap:9,overflowX:'auto',whiteSpace:'nowrap'}}>
+    <button onClick={onRefresh} title={`Atualizado: ${fmtData(data)}`} style={{background:'none',border:'none',padding:0,color:C.muted,cursor:'pointer',display:'flex',alignItems:'center',gap:5,fontSize:9.5}}><span style={{width:6,height:6,borderRadius:'50%',background:cor}}/>BCB<Icon name="refresh" size={11} color={C.muted}/></button>
+    {[['CDI',refTaxas.cdi],['Selic',refTaxas.selic],['IPCA 12m',refTaxas.ipca]].map(([l,v])=><div key={l} style={{display:'flex',alignItems:'baseline',gap:4}}><span style={{fontSize:9.5,color:C.muted}}>{l}</span><span style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,fontWeight:700}}>{fmtPct(v)}</span></div>)}
+    <span style={{fontSize:9,color:C.muted}}>ref. {fmtData(data)}</span>
   </div>;
 }
 
@@ -672,7 +704,7 @@ function App() {
   async function persistRefManual(r) { setRefTaxas(r); setTaxaStatus('manual'); await storage.set('rf-taxas-referencia', JSON.stringify(r)); }
 
   function openNew() { setForm(emptyForm); setEditingId(null); setFormError(''); setShowForm(true); }
-  function openEdit(inv) { setForm({ ...inv, valorAplicado: String(inv.valorAplicado), parametroValor: inv.parametroValor ?? '', aliquotaIRManual: inv.aliquotaIRManual ?? '', taxaOverrideAnual: inv.taxaOverrideAnual ?? '', carteira: inv.carteira || '', vincularA: inv.groupId || '' }); setEditingId(inv.id); setFormError(''); setShowForm(true); }
+  function openEdit(inv) { setForm({ ...emptyForm, ...inv, valorAplicado: String(inv.valorAplicado), parametroValor: inv.parametroValor ?? '', aliquotaIRManual: inv.aliquotaIRManual ?? '', taxaOverrideAnual: inv.taxaOverrideAnual ?? '', carteira: inv.carteira || '', vincularA: inv.groupId || '', tituloTesouro: inv.tituloTesouro || '', quantidade: inv.quantidade ?? '', precoUnitarioCompra: inv.precoUnitarioCompra ?? '', precoUnitarioAtual: inv.precoUnitarioAtual ?? '', valorAtualBrutoManual: inv.valorAtualBrutoManual ?? '', taxaCustodiaB3: inv.taxaCustodiaB3 ?? '0.20', tesouroCupom: inv.tesouroCupom || 'Não' }); setEditingId(inv.id); setFormError(''); setShowForm(true); }
   function handleTipoChange(tipo) { setForm(f => ({ ...f, tipo, isentoIR: TIPO_META[tipo].isentoDefault })); }
 
   function handleSave() {
@@ -684,7 +716,14 @@ function App() {
     if (!valor || valor <= 0) return setFormError('Informe um valor aplicado válido.');
     const grupoSelecionado = form.vincularA ? investments.find(inv => inv.id === form.vincularA || (inv.groupId || inv.id) === form.vincularA) : null;
     const groupId = grupoSelecionado ? (grupoSelecionado.groupId || grupoSelecionado.id) : (editingId ? ((investments.find(inv => inv.id === editingId)?.groupId) || editingId) : uid());
-    const campos = { instituicao: form.instituicao.trim(), tipo: form.tipo, indexador: form.indexador, parametroValor: form.parametroValor === '' ? 0 : Number(form.parametroValor), dataAplicacao: form.dataAplicacao, dataVencimento: form.dataVencimento, valorAplicado: valor, liquidez: form.liquidez, isentoIR: !!form.isentoIR, aliquotaIRManual: form.aliquotaIRManual === '' ? '' : Number(form.aliquotaIRManual), taxaOverrideAnual: form.taxaOverrideAnual === '' ? '' : Number(form.taxaOverrideAnual), carteira: form.carteira.trim(), observacoes: form.observacoes, groupId };
+    if (form.tipo === 'Tesouro Direto') {
+      if (!form.tituloTesouro.trim()) return setFormError('Informe o título do Tesouro Direto.');
+      if (!Number(form.quantidade) || Number(form.quantidade) <= 0) return setFormError('Informe a quantidade de títulos.');
+      if (!Number(form.precoUnitarioCompra) || Number(form.precoUnitarioCompra) <= 0) return setFormError('Informe o preço unitário de compra.');
+      if (!Number(form.valorAtualBrutoManual) && !Number(form.precoUnitarioAtual)) return setFormError('Informe o valor bruto atual do Tesouro ou o preço unitário atual.');
+    }
+    const campos = { instituicao: form.instituicao.trim(), tipo: form.tipo, indexador: form.indexador, parametroValor: form.parametroValor === '' ? 0 : Number(form.parametroValor), dataAplicacao: form.dataAplicacao, dataVencimento: form.dataVencimento, valorAplicado: valor, liquidez: form.liquidez, isentoIR: !!form.isentoIR, aliquotaIRManual: form.aliquotaIRManual === '' ? '' : Number(form.aliquotaIRManual), taxaOverrideAnual: form.taxaOverrideAnual === '' ? '' : Number(form.taxaOverrideAnual), carteira: form.carteira.trim(), observacoes: form.observacoes, groupId,
+      tituloTesouro: form.tituloTesouro?.trim() || '', quantidade: form.quantidade === '' ? '' : Number(form.quantidade), precoUnitarioCompra: form.precoUnitarioCompra === '' ? '' : Number(form.precoUnitarioCompra), precoUnitarioAtual: form.precoUnitarioAtual === '' ? '' : Number(form.precoUnitarioAtual), valorAtualBrutoManual: form.valorAtualBrutoManual === '' ? '' : Number(form.valorAtualBrutoManual), taxaCustodiaB3: form.taxaCustodiaB3 === '' ? 0.20 : Number(form.taxaCustodiaB3), tesouroCupom: form.tesouroCupom || 'Não' };
     if (editingId) {
       persist(investments.map(inv => inv.id === editingId ? { ...inv, ...campos, historico: (inv.historico && inv.historico.length) ? inv.historico.map(h => (h.data === inv.dataAplicacao && h.valorBruto === inv.valorAplicado) ? { ...h, data: campos.dataAplicacao, valorBruto: valor } : h) : [{ id: uid(), data: campos.dataAplicacao, valorBruto: valor }] } : inv));
     } else {
@@ -712,45 +751,20 @@ function App() {
   const listaFiltrada = useMemo(() => { let base = investments; if (filtro === 'Ativas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes >= 0); if (filtro === 'Vencidas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes < 0); if (filtro === 'Resgatadas') base = investments.filter(i => i.status === 'resgatado'); return base.slice().sort((a, b) => { const ga = grupoIdDe(a), gb = grupoIdDe(b); return ga.localeCompare(gb) || a.dataVencimento.localeCompare(b.dataVencimento) || a.dataAplicacao.localeCompare(b.dataAplicacao); }); }, [investments, filtro, metricsById]);
   const ranking = useMemo(() => { const list = ativos.slice(); const cmp = { rentLiquidaMensal: (a, b) => (metricsById[b.id].rentLiquidaMensal ?? -999) - (metricsById[a.id].rentLiquidaMensal ?? -999), rentLiquidaTotal: (a, b) => metricsById[b.id].rentLiquidaTotal - metricsById[a.id].rentLiquidaTotal, vencimento: (a, b) => a.dataVencimento.localeCompare(b.dataVencimento), valorAplicado: (a, b) => b.valorAplicado - a.valorAplicado }; return list.sort(cmp[rankBy]); }, [ativos, metricsById, rankBy]);
 
-  return <div style={{ background: C.bg, color: C.text, minHeight: '100vh', fontFamily: "'Inter', sans-serif" }}>
-    <header style={{ background: C.bg, position: 'sticky', top: 0, zIndex: 10 }} className="px-4">
-      <div style={{ maxWidth: 1152, margin: '0 auto', padding: '14px 16px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, background: C.lime, color: '#10160A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontFamily: "'IBM Plex Mono', monospace", fontSize: 14 }}>R</div>
-          <div><div style={{ fontWeight: 700, fontSize: 15 }}>Razão</div><div style={{ color: C.muted, fontSize: 10.5 }}>Controle de renda fixa</div></div>
-        </div>
-        <button onClick={openNew} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 10, padding: '10px 16px', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon name="plus" size={15} /> Nova aplicação</button>
+  return <div style={{background:C.bg,color:C.text,minHeight:'100vh',fontFamily:"'Inter', sans-serif"}}>
+    <header style={{background:C.bg,position:'sticky',top:0,zIndex:10,paddingTop:'env(safe-area-inset-top)'}}>
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'12px 14px 4px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',gap:9}}><div style={{width:30,height:30,borderRadius:9,background:C.lime,color:'#10160A',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>R</div><div><div style={{fontWeight:800,fontSize:14}}>Razão</div><div style={{color:C.muted,fontSize:9.5}}>Renda fixa, sem excesso</div></div></div>
+        <button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'8px 11px',fontWeight:800,fontSize:11.5,cursor:'pointer'}}><Icon name="plus" size={13}/> Nova</button>
       </div>
-      <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTudo} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length} />
-      <div style={{ maxWidth: 1152, margin: '0 auto', display: 'flex', gap: 4, padding: '0 16px 14px' }}>
-        {[['painel', 'Painel', 'grid'], ['ranking', 'Ranking', 'listOrdered'], ['lista', 'Aplicações', 'listChecks']].map(([t, lbl, ic]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? C.panel : 'transparent', border: 'none', cursor: 'pointer', padding: '8px 14px', borderRadius: 10, color: tab === t ? C.lime : C.muted, fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name={ic} size={14} /> {lbl}</button>
-        ))}
-      </div>
+      <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTudo} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length}/>
+      <div style={{maxWidth:1100,margin:'0 auto',display:'flex',gap:3,padding:'0 10px 8px',overflowX:'auto'}}>{[['painel','Visão','grid'],['ranking','Análise','listOrdered'],['lista','Aplicações','listChecks']].map(([t,l,ic])=><button key={t} onClick={()=>setTab(t)} style={{flex:'0 0 auto',background:tab===t?C.panel:'transparent',border:'none',borderRadius:8,padding:'7px 11px',color:tab===t?C.lime:C.muted,fontWeight:750,fontSize:11.5,cursor:'pointer',display:'flex',gap:5,alignItems:'center'}}><Icon name={ic} size={13}/>{l}</button>)}</div>
     </header>
-
-    <main style={{ maxWidth: 1152, margin: '0 auto', padding: '16px 16px 24px' }}>
-      {loading ? <div style={{ color: C.muted, padding: 40, textAlign: 'center' }}>Carregando seu livro-razão…</div>
-      : investments.length === 0 ? (
-        <div style={{ border: `1px dashed ${C.panel2}`, borderRadius: 16, padding: '48px 24px', textAlign: 'center' }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Icon name="wallet" size={26} color={C.lime} /></div>
-          <p style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>Nenhuma aplicação registrada</p>
-          <p style={{ color: C.muted, fontSize: 13.5, marginBottom: 18 }}>Adicione a primeira para começar seu controle de renda fixa.</p>
-          <button onClick={openNew} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 10, padding: '10px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 13.5 }}>Adicionar aplicação</button>
-        </div>
-      ) : <>
-        <Hero liquido={totais.liquido} deltaPct={rentLiquida} ganho={ganhoLiquido} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 28 }}>
-          <StatCard label="Aplicado (bruto)" value={fmtBRL(totais.aplicado)} sub="capital investido" />
-          <StatCard label="Valor atual bruto" value={fmtBRL(totais.bruto)} sub="antes de IR/IOF" />
-          <StatCard label="Estimado líquido no vencimento" value={fmtBRL(totais.estimadoVenc)} accent={C.lime} sub="pelas taxas de referência atuais" />
-        </div>
-        {tab === 'painel' && <Dashboard porTipo={porTipo} porIndexador={porIndexador} porInstituicao={porInstituicao} calendarioVencimentos={calendarioVencimentos} evolucao={evolucao} proximosVencimentos={proximosVencimentos} metricsById={metricsById} resgatados={resgatados} ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} refTaxas={refComHistorico} today={today} />}
-        {tab === 'ranking' && <RankingTab ranking={ranking} metricsById={metricsById} refTaxas={refComHistorico} rankBy={rankBy} setRankBy={setRankBy} />}
-        {tab === 'lista' && <ListaAplicacoes filtro={filtro} setFiltro={setFiltro} lista={listaFiltrada} metricsById={metricsById} refTaxas={refComHistorico} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir} />}
-      </>}
+    <main style={{maxWidth:1100,margin:'0 auto',padding:'10px 12px 28px'}}>
+      {loading?<div style={{color:C.muted,padding:40,textAlign:'center'}}>Carregando…</div>:investments.length===0?<div style={{background:C.panel,borderRadius:14,padding:42,textAlign:'center'}}><Icon name="wallet" size={25} color={C.lime}/><p style={{fontWeight:800}}>Nenhuma aplicação</p><p style={{color:C.muted,fontSize:12}}>Cadastre sua primeira posição.</p><button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'9px 14px',fontWeight:800}}>Adicionar</button></div>:
+      <>{tab==='painel'&&<Dashboard ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={refComHistorico} today={today} investments={investments}/>} {tab==='ranking'&&<RankingTab investments={investments} ativos={ativos} metricsById={metricsById} refTaxas={refComHistorico}/>} {tab==='lista'&&<ListaAplicacoes investments={investments} filtro={filtro} setFiltro={setFiltro} metricsById={metricsById} refTaxas={refComHistorico} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir}/>}</>}
     </main>
-    {showForm && <FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={refComHistorico} investments={investments} onClose={() => setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange} />}
+    {showForm&&<FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={refComHistorico} investments={investments} onClose={()=>setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange}/>} 
   </div>;
 }
 
@@ -847,56 +861,66 @@ function InsightsCarteira({ ativos, metricsById, refTaxas, today }) {
   </Panel>;
 }
 
-function Dashboard({ porInstituicao, proximosVencimentos, metricsById, ativos, totais, ganhoLiquido, refTaxas, today, resgatados }) {
-  const maior = porInstituicao?.[0];
-  return <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-    <IndicadoresCarteira ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={refTaxas} today={today} />
-    <InsightsCarteira ativos={ativos} metricsById={metricsById} refTaxas={refTaxas} today={today} />
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:14 }}>
-      <Panel title="Concentração por instituição" subtitle="onde está o seu patrimônio hoje">
-        {porInstituicao.length === 0 ? <div style={{color:C.muted,fontSize:12}}>Sem dados.</div> : <div style={{display:'flex',flexDirection:'column',gap:8}}>{porInstituicao.slice(0,6).map(a=>{
-          const total = porInstituicao.reduce((s,x)=>s+x.valor,0)||1; const pct=a.valor/total*100;
-          return <div key={a.name} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center'}}><div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:650,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.name}</div><div style={{height:5,background:C.panel2,borderRadius:4,marginTop:5,overflow:'hidden'}}><div style={{width:`${Math.min(pct,100)}%`,height:'100%',background:C.blue,borderRadius:4}}/></div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5}}>{fmtPct(pct)}<div style={{fontSize:9.5,color:C.muted}}>{fmtBRL(a.valor)}</div></div></div>})}</div>}
+function Dashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today, investments, setTab }) {
+  const [periodo,setPeriodo]=useState('mes');
+  const inicio=inicioPeriodo(periodo,today,investments);
+  const retorno=retornoCarteiraPeriodo(ativos,inicio,today,refTaxas);
+  const cdi=cdiPeriodo(refTaxas,inicio,today);
+  const dif=(retorno!==null&&cdi!==null)?retorno-cdi:null;
+  const grupos=grupoInstituicoes(ativos,metricsById);
+  const proximos=ativos.slice().sort((a,b)=>a.dataVencimento.localeCompare(b.dataVencimento)).slice(0,5);
+  const top=ativos.slice().sort((a,b)=>(metricsById[b.id].rentLiquidaMensal??-999)-(metricsById[a.id].rentLiquidaMensal??-999)).slice(0,5);
+  const revisao=ativos.slice().sort((a,b)=>(metricsById[a.id].rentLiquidaMensal??999)-(metricsById[b.id].rentLiquidaMensal??999)).slice(0,5);
+  const insights=[];
+  if(grupos[0]&&grupos[0].liquido/totais.liquido>.4) insights.push({t:'Concentração',d:`${grupos[0].nome} representa ${fmtPct(grupos[0].liquido/totais.liquido*100)} do patrimônio líquido. Vale avaliar diversificação.`,c:C.blue});
+  const venc30=ativos.filter(i=>metricsById[i.id].diasRestantes>=0&&metricsById[i.id].diasRestantes<=30).reduce((s,i)=>s+metricsById[i.id].valorAtualLiquido,0);
+  if(venc30>0) insights.push({t:'Vencimentos próximos',d:`${fmtBRL(venc30)} em aplicações vencem nos próximos 30 dias.`,c:C.lime});
+  const abaixo=ativos.filter(i=>i.indexador==='CDI'&&Number(i.parametroValor)<90);
+  if(abaixo.length) insights.push({t:'Taxas para revisar',d:`${abaixo.length} aplicação(ões) abaixo de 90% do CDI merecem comparação com alternativas.`,c:C.red});
+  if(!insights.length) insights.push({t:'Carteira',d:'Nenhum alerta prioritário encontrado pelas regras atuais.',c:C.lime});
+  return <div style={{display:'flex',flexDirection:'column',gap:14}}>
+    <Panel title="Desempenho" subtitle="retorno ponderado dos títulos no período selecionado" right={<div style={{display:'flex',gap:4,background:C.panel2,borderRadius:9,padding:3}}>{PERIODOS.map(([v,l])=><button key={v} onClick={()=>setPeriodo(v)} style={{border:'none',borderRadius:7,padding:'6px 9px',fontSize:10.5,fontWeight:750,cursor:'pointer',background:periodo===v?C.lime:'transparent',color:periodo===v?'#10160A':C.muted}}>{l}</button>)}</div>}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:9}}>
+        <MetricTile label="Retorno" value={fmtPct(retorno)} accent={retorno>=0?C.lime:C.red}/><MetricTile label="CDI" value={fmtPct(cdi)} /><MetricTile label="Diferença" value={fmtPct(dif)} accent={dif!==null&&dif>=0?C.lime:C.red}/><MetricTile label="% do CDI" value={retorno!==null&&cdi?fmtPct(retorno/cdi*100):'—'} />
+      </div>
+      <div style={{fontSize:10,color:C.muted,marginTop:8}}>Período: {fmtData(inicio)} → {fmtData(today)}. A comparação é ponderada pelos títulos existentes no período e não substitui uma TWR oficial.</div>
+    </Panel>
+    <div style={{display:'grid',gridTemplateColumns:'1.15fr .85fr',gap:14}}>
+      <Panel title="Instituições" subtitle="visão consolidada por emissor">
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>{grupos.slice(0,6).map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:10,alignItems:'center',padding:'8px 0',borderBottom:`1px solid ${C.hairline}`}}><InstitutionMark nome={g.nome} size={34}/><div><div style={{fontSize:12.5,fontWeight:700}}>{g.nome}</div><div style={{fontSize:10,color:C.muted}}>{g.items.length} aplicação(ões) · {fmtPct(g.liquido/totais.liquido*100)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5}}>{fmtBRL(g.liquido)}<div style={{fontSize:9,color:g.rent>=0?C.lime:C.red}}>{fmtPct(g.rent)}</div></div></div>)}</div>
       </Panel>
-      <Panel title="Próximos vencimentos" subtitle="apenas os que exigem atenção primeiro">
-        {proximosVencimentos.length === 0 ? <div style={{color:C.muted,fontSize:12}}>Nenhuma aplicação ativa.</div> : <div style={{display:'flex',flexDirection:'column',gap:8}}>{proximosVencimentos.slice(0,5).map(inv=>{const m=metricsById[inv.id]; return <div key={inv.id} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center',paddingBottom:8,borderBottom:`1px solid ${C.hairline}`}}><div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:650}}>{inv.instituicao}</div><div style={{fontSize:10.5,color:C.muted}}>vence {fmtData(inv.dataVencimento)} · {m.diasRestantes>=0?`${m.diasRestantes} dias`:'vencida'}</div></div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:12.5}}>{fmtBRL(m.valorAtualBruto)}</div></div>})}</div>}
+      <Panel title="Leitura rápida" subtitle="pontos para olhar primeiro">
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>{insights.slice(0,4).map((x,i)=><div key={i} style={{borderLeft:`3px solid ${x.c}`,paddingLeft:9}}><div style={{fontSize:11.5,fontWeight:800}}>{x.t}</div><div style={{fontSize:10.5,color:C.muted,lineHeight:1.35,marginTop:2}}>{x.d}</div></div>)}</div>
       </Panel>
     </div>
-    <Panel title="Resumo da carteira" subtitle="os detalhes completos continuam disponíveis em Ranking e Aplicações">
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))',gap:10}}>
-        {[
-          ['Valor bruto',fmtBRL(totais.bruto),C.text],
-          ['Valor líquido',fmtBRL(totais.liquido),C.lime],
-          ['Ganho líquido',fmtBRL(ganhoLiquido),ganhoLiquido>=0?C.lime:C.red],
-          ['CDI atual',fmtPct(refTaxas.cdi),C.blue],
-          ['Selic',fmtPct(refTaxas.selic),C.blue],
-          ['IPCA 12m',fmtPct(refTaxas.ipca),C.blue],
-        ].map(([l,v,c])=><div key={l} style={{background:C.panel2,borderRadius:9,padding:'10px 11px'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:800}}>{l}</div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:14.5,fontWeight:650,color:c,marginTop:5}}>{v}</div></div>)}
-      </div>
-    </Panel>
-    {resgatados.length>0 && <Panel title="Resgates recentes"><div style={{display:'flex',flexDirection:'column',gap:6}}>{resgatados.slice(0,5).map(inv=>{const ganho=inv.valorLiquidoRecebido-inv.valorAplicado; return <div key={inv.id} style={{display:'flex',justifyContent:'space-between',fontSize:12}}><span>{inv.instituicao} · {fmtData(inv.dataResgate)}</span><span style={{fontFamily:"'IBM Plex Mono', monospace",color:ganho>=0?C.lime:C.red}}>{fmtBRL(inv.valorLiquidoRecebido)}</span></div>})}</div></Panel>}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+      <Panel title="Melhores líquidos / mês"><CompactInvestmentTable items={top} metricsById={metricsById} refTaxas={refTaxas} mode="best"/></Panel>
+      <Panel title="Revisar primeiro"><CompactInvestmentTable items={revisao} metricsById={metricsById} refTaxas={refTaxas} mode="review"/></Panel>
+    </div>
+    <Panel title="Próximos vencimentos"><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:8}}>{proximos.map(i=>{const m=metricsById[i.id];return <div key={i.id} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:8,alignItems:'center',background:C.panel2,borderRadius:9,padding:'8px 9px'}}><InstitutionMark nome={i.instituicao} size={28}/><div><div style={{fontSize:11.5,fontWeight:700}}>{i.tituloTesouro||i.tipo}</div><div style={{fontSize:9.5,color:C.muted}}>{i.instituicao} · {fmtData(i.dataVencimento)}</div></div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5}}>{fmtBRL(m.valorAtualLiquido)}</div></div>})}</div></Panel>
   </div>;
 }
-function RankingTab({ ranking, metricsById, refTaxas, rankBy, setRankBy }) {
-  const opts = [['rentLiquidaMensal', 'Rentabilidade líquida mensal'], ['rentLiquidaTotal', 'Rentabilidade líquida total'], ['vencimento', 'Vencimento mais próximo'], ['valorAplicado', 'Maior valor aplicado']];
-  return <Panel title="Classificação: do melhor para o pior" subtitle="aplicações ativas ordenadas pelo critério escolhido" right={<select style={{ ...inputStyle, width: 230 }} value={rankBy} onChange={e => setRankBy(e.target.value)}>{opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>}>
-    {ranking.length === 0 ? <p style={{ color: C.muted, fontSize: 13 }}>Nenhuma aplicação ativa para classificar.</p> : (
-      <div className="scrollbar-thin" style={{ overflowX: 'auto' }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-        <thead><tr style={{ borderBottom: `1px solid ${C.hairline}` }}>{['#', 'Título', 'Taxa contratada', 'Rent. bruta/mês', 'Rent. líquida/mês', '% do CDI', 'Valor atual líquido', 'Vencimento'].map(h => <th key={h} style={{ textAlign: 'left', color: C.muted, fontSize: 10, textTransform: 'uppercase', padding: '8px 10px', whiteSpace: 'nowrap', fontWeight: 700 }}>{h}</th>)}</tr></thead>
-        <tbody>{ranking.map((inv, i) => { const m = metricsById[inv.id]; const melhor = i === 0, pior = i === ranking.length - 1 && ranking.length > 1; return (
-          <tr key={inv.id} style={{ borderBottom: `1px solid ${C.hairline}`, background: melhor ? C.lime + '10' : pior ? C.red + '10' : 'transparent' }}>
-            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", color: melhor ? C.lime : pior ? C.red : C.muted, fontWeight: 700, fontSize: 13 }}>{i + 1}{melhor && <span style={{ marginLeft: 4, display: 'inline-flex', verticalAlign: '-2px' }}><Icon name="trophy" size={11} /></span>}</td>
-            <td style={{ padding: 10 }}><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TipoTag tipo={inv.tipo} /><span style={{ fontWeight: 600, fontSize: 13 }}>{inv.instituicao}</span></div></td>
-            <td style={{ padding: 10, fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap' }}>{descricaoTaxa(inv, refTaxas)}</td>
-            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtPct(m.rentBrutaMensal)}</td>
-            <td style={{ padding: 10 }}><Delta value={m.rentLiquidaMensal} size={12.5} /></td>
-            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: m.pctCDILiquido !== null && m.pctCDILiquido >= 100 ? C.lime : C.text }}>{m.pctCDILiquido !== null ? fmtPct(m.pctCDILiquido) : '—'}</td>
-            <td style={{ padding: 10, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5 }}>{fmtBRL(m.valorAtualLiquido)}</td>
-            <td style={{ padding: 10, fontSize: 11.5, whiteSpace: 'nowrap' }}>{fmtData(inv.dataVencimento)}</td>
-          </tr>); })}</tbody>
-      </table></div>
-    )}
-  </Panel>;
+function MetricTile({label,value,accent}){return <div style={{background:C.panel2,borderRadius:9,padding:'10px 11px'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:800}}>{label}</div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:15,fontWeight:700,color:accent||C.text,marginTop:4}}>{value}</div></div>}
+function CompactInvestmentTable({items,metricsById,mode,refTaxas}){return <div>{items.map(i=>{const m=metricsById[i.id];return <div key={i.id} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:9,alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${C.hairline}`}}><InstitutionMark nome={i.instituicao} size={28}/><div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{i.tituloTesouro||i.tipo} · {i.instituicao}</div><div style={{fontSize:9.5,color:C.muted}}>{descricaoTaxa(i,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:m.rentLiquidaMensal>=0?(mode==='best'?C.lime:C.text):C.red}}>{fmtPct(m.rentLiquidaMensal)}<div style={{fontSize:8.5,color:C.muted}}>líq./mês</div></div></div>})}</div>}
+
+function RankingTab({ investments, ativos, metricsById, refTaxas, setTab }){
+  const [filtroInst,setFiltroInst]=useState('Todas as instituições'); const [filtroTipo,setFiltroTipo]=useState('Todos os tipos'); const [ordenacao,setOrdenacao]=useState('rentLiquidaMensal'); const [periodo,setPeriodo]=useState('mes');
+  const hoje=todayStr(); const inicio=inicioPeriodo(periodo,hoje,investments); const cdi=cdiPeriodo(refTaxas,inicio,hoje);
+  const insts=[...new Map(ativos.map(i=>[normalizarInstituicao(i.instituicao),i.instituicao])).values()].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const tipos=[...new Set(ativos.map(i=>i.tipo))].sort();
+  const rows=ativos.filter(i=>(filtroInst==='Todas as instituições'||i.instituicao===filtroInst)&&(filtroTipo==='Todos os tipos'||i.tipo===filtroTipo)).slice().sort((a,b)=>ordenacao==='rentLiquidaMensal'?(metricsById[b.id].rentLiquidaMensal??-999)-(metricsById[a.id].rentLiquidaMensal??-999):ordenacao==='valor'?(metricsById[b.id].valorAtualLiquido-metricsById[a.id].valorAtualLiquido):a.dataVencimento.localeCompare(b.dataVencimento));
+  const grupos=grupoInstituicoes(rows,metricsById);
+  return <div style={{display:'flex',flexDirection:'column',gap:14}}>
+    <Panel title="Comparação" subtitle="use os filtros para reduzir a carteira antes de comparar">
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8}}><select style={inputStyle} value={periodo} onChange={e=>setPeriodo(e.target.value)}>{PERIODOS.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><select style={inputStyle} value={filtroInst} onChange={e=>setFiltroInst(e.target.value)}><option>Todas as instituições</option>{insts.map(x=><option key={x}>{x}</option>)}</select><select style={inputStyle} value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}><option>Todos os tipos</option>{tipos.map(x=><option key={x}>{x}</option>)}</select><select style={inputStyle} value={ordenacao} onChange={e=>setOrdenacao(e.target.value)}><option value="rentLiquidaMensal">Melhor líquido / mês</option><option value="valor">Maior valor</option><option value="vencimento">Vencimento</option></select></div><div style={{fontSize:10,color:C.muted,marginTop:8}}>Período: {fmtData(inicio)} → {fmtData(hoje)} · CDI: {fmtPct(cdi)}</div>
+    </Panel>
+    <Panel title="Consolidado por instituição" subtitle="uma instituição pode ter vários títulos e aportes; aqui eles aparecem somados">
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:9}}>{grupos.map(g=><div key={g.key} style={{background:C.panel2,borderRadius:10,padding:11,display:'grid',gridTemplateColumns:'auto 1fr auto',gap:9,alignItems:'center'}}><InstitutionMark nome={g.nome} size={34}/><div><div style={{fontWeight:750,fontSize:12.5}}>{g.nome}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} título(s) · {fmtPct(g.liquido/(grupos.reduce((s,x)=>s+x.liquido,0)||1)*100)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:12}}>{fmtBRL(g.liquido)}<div style={{fontSize:9,color:g.rent>=0?C.lime:C.red}}>{fmtPct(g.rent)}</div></div></div>)}</div>
+    </Panel>
+    <Panel title="Tabela comparativa" subtitle={`${rows.length} aplicação(ões) no filtro atual`}>
+      <div className="scrollbar-thin" style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',minWidth:760}}><thead><tr>{['','Aplicação','Taxa','Retorno período','Líquido/mês','% CDI líq.','Atual líquido','Vencimento'].map(h=><th key={h} style={{textAlign:'left',color:C.muted,fontSize:9.5,textTransform:'uppercase',padding:'7px 8px',borderBottom:`1px solid ${C.hairline}`,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead><tbody>{rows.map((i,idx)=>{const m=metricsById[i.id];return <tr key={i.id}><td style={{padding:'8px'}}><InstitutionMark nome={i.instituicao} size={28}/></td><td style={{padding:'8px',fontSize:11.5}}><b>{i.tituloTesouro||i.tipo}</b><div style={{fontSize:9.5,color:C.muted}}>{i.instituicao}</div></td><td style={{padding:'8px',fontSize:10.5,color:C.muted}}>{descricaoTaxa(i,refTaxas)}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:(retornoPeriodoInvestimento(i,inicio,hoje,refTaxas)??0)>=0?C.lime:C.red}}>{fmtPct(retornoPeriodoInvestimento(i,inicio,hoje,refTaxas))}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:m.rentLiquidaMensal>=0?C.lime:C.red}}>{fmtPct(m.rentLiquidaMensal)}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5}}>{m.pctCDILiquido==null?'—':fmtPct(m.pctCDILiquido)}</td><td style={{padding:'8px',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5}}>{fmtBRL(m.valorAtualLiquido)}</td><td style={{padding:'8px',fontSize:10.5}}>{fmtData(i.dataVencimento)}</td></tr>})}</tbody></table></div>
+    </Panel>
+  </div>;
 }
 
 function exportarCSV(lista, metricsById, refTaxas) {
@@ -914,152 +938,70 @@ function resumoGrupo(lista, metricsById, groupId) {
   const itens = lista.filter(inv => grupoIdDe(inv) === groupId);
   return itens.reduce((acc, inv) => { const m = metricsById[inv.id]; acc.qtd += 1; acc.aplicado += inv.valorAplicado; acc.bruto += m.valorAtualBruto; acc.liquido += m.valorAtualLiquido; acc.estimado += m.valorEstLiquidoVenc; return acc; }, { qtd: 0, aplicado: 0, bruto: 0, liquido: 0, estimado: 0 });
 }
-function ListaAplicacoes({ filtro, setFiltro, lista, metricsById, refTaxas, expandedId, setExpandedId, openEdit, deleteInvestment, historicoDraft, setHistoricoDraft, addHistorico, resgatandoId, setResgatandoId, resgateDraft, setResgateDraft, confirmResgate, reabrir }) {
-  return <div>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{['Ativas', 'Vencidas', 'Resgatadas', 'Todas'].map(f => <button key={f} onClick={() => setFiltro(f)} style={{ background: filtro === f ? C.lime : C.panel, color: filtro === f ? '#10160A' : C.muted, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{f}</button>)}</div>
-      {lista.length > 0 && <button onClick={() => exportarCSV(lista, metricsById, refTaxas)} style={{ background: C.panel, color: C.mutedLight, border: 'none', borderRadius: 10, padding: '7px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>Exportar CSV</button>}
-    </div>
-    {lista.length === 0 ? <p style={{ color: C.muted, fontSize: 14 }}>Nenhuma aplicação nesse filtro.</p> : (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{lista.map((inv, idx) => {
-        const m = metricsById[inv.id];
-        const gid = grupoIdDe(inv);
-        const anterior = idx > 0 ? lista[idx - 1] : null;
-        const inicioGrupo = !anterior || grupoIdDe(anterior) !== gid;
-        const membrosGrupo = lista.filter(x => grupoIdDe(x) === gid);
-        const rg = inicioGrupo && membrosGrupo.length > 1 ? resumoGrupo(lista, metricsById, gid) : null; const vencida = inv.status === 'ativo' && m.diasRestantes < 0; const expanded = expandedId === inv.id;
-        const hist = (inv.historico || []).slice().sort((a, b) => b.data.localeCompare(a.data));
-        return <React.Fragment key={inv.id}>
-          {inicioGrupo && rg && <div style={{ background: C.panel2, border: `1px solid ${C.hairline}`, borderRadius: 14, padding: '12px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div><div style={{ fontSize: 10.5, color: C.lime, textTransform: 'uppercase', fontWeight: 800, letterSpacing: '.04em' }}>Investimento agrupado · {rg.qtd} aportes</div><div style={{ fontWeight: 700, fontSize: 14, marginTop: 3 }}>{inv.instituicao} · {inv.tipo} · {descricaoTaxa(inv, refTaxas)}</div><div style={{ color: C.muted, fontSize: 11, marginTop: 3 }}>Aportes separados para o cálculo; visão consolidada para o controle. Cada aporte conserva sua própria data de aplicação e vencimento.</div></div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,auto)', gap: 14, textAlign: 'right' }}>
-                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Aplicado</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtBRL(rg.aplicado)}</div></div>
-                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Atual bruto</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{fmtBRL(rg.bruto)}</div></div>
-                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Atual líquido</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.lime }}>{fmtBRL(rg.liquido)}</div></div>
-                <div><div style={{ color: C.muted, fontSize: 9, textTransform: 'uppercase', fontWeight: 700 }}>Projeção</div><div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: C.blue }}>{fmtBRL(rg.estimado)}</div></div>
-              </div>
-            </div>
-          </div>}
-          <div style={{ background: C.panel, borderRadius: 16, padding: 16, boxShadow: shadow, borderTop: `1px solid ${vencida ? C.red + '55' : C.hairline}`, marginLeft: membrosGrupo.length > 1 ? 10 : 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <TipoTag tipo={inv.tipo} /><span style={{ fontWeight: 700, fontSize: 14.5 }}>{inv.instituicao}</span>
-                {inv.status === 'resgatado' && <Badge cor={C.slate} texto="Resgatado" />}
-                {vencida && <Badge cor={C.red} texto="Vencida" icon={<Icon name="alert" size={11} />} />}
-                {inv.isentoIR && <Badge cor={C.lime} texto="Isento IR" />}
-                {inv.carteira && <Badge cor={C.blue} texto={inv.carteira} />}
-              </div>
-              <div style={{ color: C.muted, fontSize: 11.5, marginTop: 5 }}>{descricaoTaxa(inv, refTaxas)} · aplicado em {fmtData(inv.dataAplicacao)} · vence em {fmtData(inv.dataVencimento)} · {inv.liquidez}</div>{inv.isentoIR && <div style={{ color: C.blue, fontSize: 10.5, marginTop: 4 }}>Equivale a {fmtPct(m.percentualCDIEquivalente)} do CDI em produto tributável, considerando IR de {fmtPct(m.aliquotaComparacao)}.</div>}
-              <div style={{ marginTop: 10, maxWidth: 340 }}><MaturityBar diasCorridos={m.diasCorridos} diasTotais={m.diasTotais} vencida={vencida} /><div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{inv.status === 'ativo' ? (m.diasRestantes >= 0 ? `${m.diasRestantes} dias até o vencimento` : `vencida há ${Math.abs(m.diasRestantes)} dias`) : `resgatado em ${fmtData(inv.dataResgate)}`}</div></div>
-            </div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <IconBtn onClick={() => openEdit(inv)} title="Editar"><Icon name="pencil" size={14} /></IconBtn>
-              <IconBtn onClick={() => setExpandedId(expanded ? null : inv.id)} title="Detalhes"><Icon name={expanded ? 'chevronUp' : 'chevronDown'} size={14} /></IconBtn>
-              <IconBtn onClick={() => deleteInvestment(inv.id)} title="Excluir" danger><Icon name="trash" size={14} /></IconBtn>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 16 }}>
-            <Mini label="Aplicado (bruto)" value={fmtBRL(inv.valorAplicado)} />
-            <Mini label={m.projetado ? 'Atual (bruto) · projetado' : 'Atual (bruto)'} value={fmtBRL(m.valorAtualBruto)} />
-            <Mini label={m.projetado ? 'Atual (líquido) · projetado' : 'Atual (líquido)'} value={fmtBRL(m.valorAtualLiquido)} accent={C.lime} />
-            <Mini label="Estimado líquido no venc." value={fmtBRL(m.valorEstLiquidoVenc)} accent={C.blue} />
-          </div>
-          {m.projetado && <div style={{ color: C.muted, fontSize: 10.5, marginTop: 4 }}>{m.precisao === 'historico' ? `composto dia a dia com o histórico oficial do CDI/Selic, incluindo o dia da aplicação` : `projetado a partir de ${fmtData(m.ancoraData)} pela taxa efetiva atual (${fmtPct(m.taxaAnual)} a.a.) — lance um valor real do extrato quando quiser corrigir`}</div>}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 12 }}>
-            <div><div style={{ color: C.muted, fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Rent. líquida / mês</div><Delta value={m.rentLiquidaMensal} size={13.5} /></div>
-            <Mini label="Rent. líquida total" value={fmtPct(m.rentLiquidaTotal)} />
-            <Mini label="% do CDI (líquido)" value={m.pctCDILiquido !== null ? fmtPct(m.pctCDILiquido) : '—'} accent={m.pctCDILiquido !== null && m.pctCDILiquido >= 100 ? C.lime : C.text} />
-            <Mini label="Ganho líquido até hoje" value={fmtBRL(m.valorAtualLiquido - inv.valorAplicado)} accent={m.valorAtualLiquido >= inv.valorAplicado ? C.lime : C.red} />
-          </div>
-          <div style={{ color: C.muted, fontSize: 9.5, marginTop: 4 }}>Rent. líquida / mês = taxa mensal equivalente do retorno líquido acumulado até hoje.</div>
-          {expanded && <div style={{ marginTop: 16, borderTop: `1px solid ${C.hairline}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12 }}>
-              <Mini label="Dias corridos" value={m.diasCorridos} />
-              <Mini label="Rent. bruta / mês" value={fmtPct(m.rentBrutaMensal)} />
-              <Mini label="Alíquota IR atual" value={inv.isentoIR ? 'Isento' : fmtPct(m.aliqIR)} />
-              <Mini label="IOF (se resgate hoje)" value={m.iofAliq > 0 ? fmtPct(m.iofAliq) : '—'} />
-              <Mini label="Ganho bruto até hoje" value={fmtBRL(m.ganhoBruto)} accent={m.ganhoBruto >= 0 ? C.lime : C.red} />
-              <Mini label="Ganho estimado no venc." value={fmtBRL(m.ganhoEstVenc)} accent={m.ganhoEstVenc >= 0 ? C.lime : C.red} />
-              <Mini label="Rent. bruta total" value={fmtPct(m.rentBrutaTotal)} />{inv.isentoIR && <Mini label="Equiv. tributável" value={`${fmtPct(m.percentualCDIEquivalente)} do CDI`} accent={C.blue} />}
-            </div>
-            {inv.observacoes && <div><SectionLabel>Observações</SectionLabel><p style={{ fontSize: 13 }}>{inv.observacoes}</p></div>}
-            <div>
-              <SectionLabel>Evolução mensal (valor bruto)</SectionLabel>
-              <MiniLineChart data={buildMonthlySeriesForInv(inv, refTaxas, todayStr())} valueKey="bruto" labelKey="label" height={140} color={C.lime} />
-              <div style={{ color: C.muted, fontSize: 10.5, marginTop: 2 }}>fim de cada mês — projetado pela taxa efetiva atual entre os lançamentos reais que você fez</div>
-            </div>
-            <div>
-              <SectionLabel icon={<Icon name="history" size={12} />}>Histórico de valores</SectionLabel>
-              <div className="scrollbar-thin" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, maxHeight: 140, overflowY: 'auto' }}>{hist.map(h => <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.muted, padding: '3px 0' }}><span>{fmtData(h.data)}</span><span style={{ fontFamily: "'IBM Plex Mono', monospace", color: C.text }}>{fmtBRL(h.valorBruto)}</span></div>)}</div>
-              {inv.status === 'ativo' && <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <div><span style={{ color: C.muted, fontSize: 11 }}>Data</span><input type="date" style={{ ...inputStyle, width: 150 }} value={historicoDraft.data} onChange={e => setHistoricoDraft(d => ({ ...d, data: e.target.value }))} /></div>
-                <div><span style={{ color: C.muted, fontSize: 11 }}>Valor bruto atual</span><input type="number" placeholder="0,00" style={{ ...inputStyle, width: 140 }} value={historicoDraft.valor} onChange={e => setHistoricoDraft(d => ({ ...d, valor: e.target.value }))} /></div>
-                <button onClick={() => addHistorico(inv.id)} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Registrar</button>
-              </div>}
-            </div>
-            {inv.status === 'ativo' ? (resgatandoId === inv.id ? (
-              <div><SectionLabel>Registrar resgate</SectionLabel><div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <div><span style={{ color: C.muted, fontSize: 11 }}>Data do resgate</span><input type="date" style={{ ...inputStyle, width: 150 }} value={resgateDraft.data} onChange={e => setResgateDraft(d => ({ ...d, data: e.target.value }))} /></div>
-                <div><span style={{ color: C.muted, fontSize: 11 }}>Valor líquido recebido</span><input type="number" placeholder="0,00" style={{ ...inputStyle, width: 150 }} value={resgateDraft.valor} onChange={e => setResgateDraft(d => ({ ...d, valor: e.target.value }))} /></div>
-                <button onClick={() => confirmResgate(inv.id)} style={{ background: C.lime, color: '#10160A', border: 'none', borderRadius: 8, padding: '9px 14px', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>Confirmar</button>
-                <button onClick={() => setResgatandoId(null)} style={{ background: 'none', color: C.muted, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '9px 14px', fontSize: 12.5, cursor: 'pointer' }}>Cancelar</button>
-              </div></div>
-            ) : <button onClick={() => { setResgatandoId(inv.id); setResgateDraft({ data: todayStr(), valor: Math.round(m.valorAtualLiquido * 100) / 100 }); }} style={{ alignSelf: 'flex-start', background: C.panel2, color: C.lime, border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="check" size={14} /> Registrar resgate</button>
-            ) : <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 13, color: C.muted }}>Recebido líquido: <b style={{ color: C.text }}>{fmtBRL(inv.valorLiquidoRecebido)}</b></span><button onClick={() => reabrir(inv.id)} style={{ background: 'none', color: C.muted, border: `1px solid ${C.hairline}`, borderRadius: 8, padding: '6px 12px', fontSize: 12, cursor: 'pointer' }}>Reabrir</button></div>}
-          </div>}
-          </div>
-        </React.Fragment>;
-      })}</div>
-    )}
+function ListaAplicacoes({ investments, filtro, setFiltro, metricsById, refTaxas, expandedId, setExpandedId, openEdit, deleteInvestment, historicoDraft, setHistoricoDraft, addHistorico, resgatandoId, setResgatandoId, resgateDraft, setResgateDraft, confirmResgate, reabrir }){
+  const [inst,setInst]=useState('Todas'),[tipo,setTipo]=useState('Todos'),[busca,setBusca]=useState('');
+  const ativos=investments.filter(i=>i.status==='ativo'); const insts=[...new Map(investments.map(i=>[normalizarInstituicao(i.instituicao),i.instituicao])).values()].sort((a,b)=>a.localeCompare(b,'pt-BR')); const tipos=[...new Set(investments.map(i=>i.tipo))].sort();
+  let lista=investments.filter(i=>{if(filtro==='Ativas'&&!(i.status==='ativo'&&metricsById[i.id].diasRestantes>=0))return false;if(filtro==='Vencidas'&&!(i.status==='ativo'&&metricsById[i.id].diasRestantes<0))return false;if(filtro==='Resgatadas'&&i.status!=='resgatado')return false;if(inst!=='Todas'&&i.instituicao!==inst)return false;if(tipo!=='Todos'&&i.tipo!==tipo)return false;if(busca&&!`${i.instituicao} ${i.tipo} ${i.indexador} ${i.tituloTesouro||''}`.toLowerCase().includes(busca.toLowerCase()))return false;return true;});
+  const grupos=grupoInstituicoes(lista,metricsById);
+  return <div style={{display:'flex',flexDirection:'column',gap:12}}>
+    <div style={{background:C.panel,borderRadius:12,padding:10,display:'grid',gridTemplateColumns:'1.4fr repeat(3,minmax(110px,1fr))',gap:7,position:'sticky',top:120,zIndex:5}}><input style={inputStyle} placeholder="Pesquisar instituição, título..." value={busca} onChange={e=>setBusca(e.target.value)}/><select style={inputStyle} value={filtro} onChange={e=>setFiltro(e.target.value)}><option>Ativas</option><option>Vencidas</option><option>Resgatadas</option><option>Todas</option></select><select style={inputStyle} value={inst} onChange={e=>setInst(e.target.value)}><option>Todas</option>{insts.map(x=><option key={x}>{x}</option>)}</select><select style={inputStyle} value={tipo} onChange={e=>setTipo(e.target.value)}><option>Todos</option>{tipos.map(x=><option key={x}>{x}</option>)}</select></div>
+    {grupos.length===0?<div style={{color:C.muted,fontSize:13,padding:20}}>Nenhuma aplicação encontrada.</div>:grupos.map(g=><InstitutionGroup key={g.key} group={g} metricsById={metricsById} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir} refTaxas={refTaxas}/>) }
   </div>;
+}
+function InstitutionGroup({group,metricsById,expandedId,setExpandedId,openEdit,deleteInvestment,historicoDraft,setHistoricoDraft,addHistorico,resgatandoId,setResgatandoId,resgateDraft,setResgateDraft,confirmResgate,reabrir,refTaxas}){
+  const [open,setOpen]=useState(true); return <section style={{background:C.panel,borderRadius:14,padding:13,boxShadow:shadow,borderTop:`1px solid ${C.hairline}`}}>
+    <button onClick={()=>setOpen(!open)} style={{width:'100%',background:'none',border:'none',color:C.text,cursor:'pointer',display:'grid',gridTemplateColumns:'auto 1fr auto',gap:10,alignItems:'center',textAlign:'left',padding:0}}><InstitutionMark nome={group.nome} size={38}/><div><div style={{fontSize:14,fontWeight:800}}>{group.nome}</div><div style={{fontSize:10,color:C.muted}}>{group.items.length} aplicação(ões) · {fmtBRL(group.liquido)} líquido · {fmtPct(group.rent)} acumulado</div></div><Icon name={open?'chevronUp':'chevronDown'} size={16} color={C.muted}/></button>
+    {open&&<div style={{marginTop:10,borderTop:`1px solid ${C.hairline}`,paddingTop:6}}>{group.items.sort((a,b)=>a.dataVencimento.localeCompare(b.dataVencimento)).map(inv=><InvestmentCompact key={inv.id} inv={inv} metricsById={metricsById} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir} refTaxas={refTaxas}/>)}</div>}
+  </section>;
+}
+function InvestmentCompact({inv,metricsById,expandedId,setExpandedId,openEdit,deleteInvestment,historicoDraft,setHistoricoDraft,addHistorico,resgatandoId,setResgatandoId,resgateDraft,setResgateDraft,confirmResgate,reabrir,refTaxas}){
+ const m=metricsById[inv.id], expanded=expandedId===inv.id, vencida=inv.status==='ativo'&&m.diasRestantes<0;
+ return <div style={{padding:'10px 2px',borderBottom:`1px solid ${C.hairline}`}}><div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,alignItems:'start'}}><div style={{minWidth:0}}><div style={{display:'flex',alignItems:'center',gap:7,flexWrap:'wrap'}}><TipoTag tipo={inv.tipo}/><span style={{fontWeight:700,fontSize:12.5}}>{inv.tituloTesouro||descricaoTaxa(inv,refTaxas)}</span>{vencida&&<Badge cor={C.red} texto="Vencida"/>}</div><div style={{fontSize:9.5,color:C.muted,marginTop:3}}>{inv.tituloTesouro?`${descricaoTaxa(inv,refTaxas)} · `:''}{fmtData(inv.dataAplicacao)} → {fmtData(inv.dataVencimento)}{inv.liquidez==='Diária'?' · liquidez diária':''}</div></div><div style={{display:'flex',gap:4}}><IconBtn onClick={()=>openEdit(inv)} title="Editar"><Icon name="pencil" size={13}/></IconBtn><IconBtn onClick={()=>setExpandedId(expanded?null:inv.id)} title="Detalhes"><Icon name={expanded?'chevronUp':'chevronDown'} size={13}/></IconBtn></div></div>
+ <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginTop:9}}><Mini label="Atual líquido" value={fmtBRL(m.valorAtualLiquido)} accent={C.lime}/><Mini label="Líquido/mês" value={fmtPct(m.rentLiquidaMensal)} accent={m.rentLiquidaMensal>=0?C.lime:C.red}/><Mini label="Atual bruto" value={fmtBRL(m.valorAtualBruto)}/><Mini label="Vencimento" value={fmtData(inv.dataVencimento)}/></div>
+ {expanded&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.hairline}`,display:'grid',gap:10}}><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:8}}><Mini label="Aplicado" value={fmtBRL(inv.valorAplicado)}/><Mini label="Ganho líquido" value={fmtBRL(m.valorAtualLiquido-inv.valorAplicado)} accent={m.valorAtualLiquido>=inv.valorAplicado?C.lime:C.red}/><Mini label="Est. líquido venc." value={fmtBRL(m.valorEstLiquidoVenc)} accent={C.blue}/><Mini label="% CDI líquido" value={m.pctCDILiquido==null?'—':fmtPct(m.pctCDILiquido)}/>{inv.tipo==='Tesouro Direto'&&<Mini label="Custódia est. no venc." value={fmtBRL(m.custodiaVenc)} accent={C.muted}/>}</div>{inv.tipo==='Tesouro Direto'&&<div style={{fontSize:10,color:C.muted}}>Valor atual marcado a mercado{m.precisao!=='estimado'?` · ${m.precisao.replace('mercado-','')}`:''}. A projeção de vencimento é estimativa pela taxa contratada.</div>}<div style={{display:'flex',justifyContent:'flex-end',gap:5}}><IconBtn onClick={()=>deleteInvestment(inv.id)} title="Excluir" danger><Icon name="trash" size={13}/></IconBtn></div></div>}
+ </div>;
 }
 
 function FormModal({ form, setForm, editingId, formError, refTaxas, investments, onClose, onSave, onTipoChange }) {
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
-  const bancos = [...new Set(investments.map(i => String(i.instituicao || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const bancoExistente = bancos.includes(form.instituicao);
-  function selecionarBanco(e) { const v=e.target.value; if(v==='__novo__') setForm(f=>({...f,instituicao:''})); else setForm(f=>({...f,instituicao:v})); }
-  function handleVincularChange(e) {
-    const value = e.target.value;
-    const base = value ? investments.find(inv => inv.id === value || (inv.groupId || inv.id) === value) : null;
-    if (!base) { setForm(f => ({ ...f, vincularA: '' })); return; }
-    setForm(f => ({ ...f, vincularA: base.groupId || base.id, instituicao: base.instituicao, tipo: base.tipo, indexador: base.indexador, parametroValor: base.parametroValor ?? '', liquidez: base.liquidez || f.liquidez, isentoIR: !!base.isentoIR, aliquotaIRManual: base.aliquotaIRManual ?? '', taxaOverrideAnual: base.taxaOverrideAnual ?? '', carteira: base.carteira || f.carteira }));
-  }
-  const efetiva = taxaAnualEfetiva({ ...form, parametroValor: form.parametroValor }, refTaxas);
-  const gruposExistentes = investments.filter(i => i.status === 'ativo' && i.id !== editingId).reduce((acc, inv) => {
-    const gid = inv.groupId || inv.id;
-    if (!acc.some(x => x.id === gid)) acc.push({ id: gid, inv });
-    return acc;
-  }, []);
-  return <div style={{ position: 'fixed', inset: 0, background: '#000000C0', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto', zIndex: 50 }}>
-    <div style={{ background: C.panel, borderRadius: 18, width: '100%', maxWidth: 620, padding: 24, boxShadow: shadow, borderTop: `1px solid ${C.hairline}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>{editingId ? 'Editar aplicação' : 'Nova aplicação'}</h2>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><Icon name="x" size={19} /></button>
+  const set=(k)=>(e)=>setForm(f=>({...f,[k]:e.target.value}));
+  const bancos=[...new Map(investments.map(i=>[normalizarInstituicao(i.instituicao),i.instituicao]).filter(x=>x[0])).values()].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const bancoExistente=bancos.includes(form.instituicao);
+  function selecionarBanco(e){const v=e.target.value;setForm(f=>({...f,instituicao:v==='__novo__'?'':v}));}
+  function handleVincularChange(e){const value=e.target.value;const base=value?investments.find(inv=>inv.id===value||(inv.groupId||inv.id)===value):null;if(!base){setForm(f=>({...f,vincularA:''}));return;}setForm(f=>({...f,vincularA:base.groupId||base.id,instituicao:base.instituicao,tipo:base.tipo,indexador:base.indexador,parametroValor:base.parametroValor??'',liquidez:base.liquidez||f.liquidez,isentoIR:!!base.isentoIR,aliquotaIRManual:base.aliquotaIRManual??'',taxaOverrideAnual:base.taxaOverrideAnual??'',carteira:base.carteira||f.carteira}));}
+  const efetiva=taxaAnualEfetiva({...form,parametroValor:form.parametroValor},refTaxas);
+  const gruposExistentes=investments.filter(i=>i.status==='ativo'&&i.id!==editingId).reduce((acc,inv)=>{const gid=inv.groupId||inv.id;if(!acc.some(x=>x.id===gid))acc.push({id:gid,inv});return acc;},[]);
+  const tesouro=form.tipo==='Tesouro Direto';
+  return <div style={{position:'fixed',inset:0,background:'#000000C8',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'max(20px,env(safe-area-inset-top)) 14px 28px',overflowY:'auto',zIndex:50}}>
+    <div style={{background:C.panel,borderRadius:18,width:'100%',maxWidth:680,padding:20,boxShadow:shadow,borderTop:`1px solid ${C.hairline}`}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}><div><h2 style={{fontSize:17,fontWeight:750,margin:0}}>{editingId?'Editar aplicação':'Nova aplicação'}</h2><div style={{fontSize:11,color:C.muted,marginTop:3}}>Preencha só o que é necessário; os detalhes avançados ficam abaixo.</div></div><button onClick={onClose} style={{background:'none',border:'none',color:C.muted,cursor:'pointer'}}><Icon name="x" size={19}/></button></div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:13}}>
+        <Field label="Instituição / emissor"><select style={inputStyle} value={bancoExistente?form.instituicao:'__novo__'} onChange={selecionarBanco}><option value="__novo__">+ Nova instituição</option>{bancos.map(b=><option key={b} value={b}>{b}</option>)}</select>{!bancoExistente&&<input style={{...inputStyle,marginTop:6}} placeholder="Nome da instituição" value={form.instituicao} onChange={set('instituicao')}/>}</Field>
+        <Field label="Vincular a investimento existente" hint="Agrupa aportes sem misturar as datas de rendimento."><select style={inputStyle} value={form.vincularA||''} onChange={handleVincularChange}><option value="">Não vincular</option>{gruposExistentes.map(({id,inv})=><option key={id} value={id}>{inv.instituicao} · {inv.tipo} · {descricaoTaxa(inv,refTaxas)}</option>)}</select></Field>
+        <Field label="Tipo"><select style={inputStyle} value={form.tipo} onChange={e=>onTipoChange(e.target.value)}>{TIPOS.map(t=><option key={t}>{t}</option>)}</select></Field>
+        <Field label="Indexador"><select style={inputStyle} value={form.indexador} onChange={set('indexador')}>{INDEXADORES.map(t=><option key={t}>{t}</option>)}</select></Field>
+        <Field label={parametroLabel(form.indexador)} hint={tesouro?`Taxa contratada: ${fmtPct(efetiva)} a.a. · mercado pode variar`:`taxa efetiva: ${fmtPct(efetiva)} a.a.`}><input type="number" style={inputStyle} placeholder="Ex.: 100 / 89 / 12,5" value={form.parametroValor} onChange={set('parametroValor')}/></Field>
+        <Field label="Data de aplicação"><input type="date" style={inputStyle} value={form.dataAplicacao} onChange={set('dataAplicacao')}/></Field>
+        <Field label="Vencimento"><input type="date" style={inputStyle} value={form.dataVencimento} onChange={set('dataVencimento')}/></Field>
+        <Field label="Valor aplicado"><input type="number" style={inputStyle} placeholder="0,00" value={form.valorAplicado} onChange={set('valorAplicado')}/></Field>
+        <Field label="Liquidez"><select style={inputStyle} value={form.liquidez} onChange={set('liquidez')}>{LIQUIDEZ_OPTS.map(t=><option key={t}>{t}</option>)}</select></Field>
+        {tesouro&&<>
+          <div style={{gridColumn:'1 / -1',background:C.panel2,borderRadius:12,padding:13,border:`1px solid ${C.hairline}`}}><div style={{fontSize:11,fontWeight:800,color:C.slate,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:10}}>Dados específicos do Tesouro Direto</div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:11}}>
+            <Field label="Título"><input style={inputStyle} placeholder="Ex.: Tesouro Selic 2029" value={form.tituloTesouro} onChange={set('tituloTesouro')}/></Field>
+            <Field label="Quantidade"><input type="number" step="0.001" style={inputStyle} placeholder="Ex.: 2,35" value={form.quantidade} onChange={set('quantidade')}/></Field>
+            <Field label="Preço unitário de compra"><input type="number" step="0.01" style={inputStyle} placeholder="R$" value={form.precoUnitarioCompra} onChange={set('precoUnitarioCompra')}/></Field>
+            <Field label="Preço unitário atual (opcional)"><input type="number" step="0.01" style={inputStyle} placeholder="do extrato/Portal" value={form.precoUnitarioAtual} onChange={set('precoUnitarioAtual')}/></Field>
+            <Field label="Valor bruto atual (preferível)"><input type="number" step="0.01" style={inputStyle} placeholder="do banco/Portal" value={form.valorAtualBrutoManual} onChange={set('valorAtualBrutoManual')}/></Field>
+            <Field label="Juros semestrais / fluxo"><select style={inputStyle} value={form.tesouroCupom} onChange={set('tesouroCupom')}><option>Não</option><option>Sim</option><option>Renda+ mensal</option><option>Educa+ mensal</option></select></Field>
+          </div><div style={{fontSize:10.5,color:C.muted,lineHeight:1.45,marginTop:9}}>O valor atual do Tesouro é marcado a mercado. Por isso, quando você informar o valor bruto atual do extrato, ele prevalece sobre uma projeção matemática. A projeção até o vencimento usa a taxa contratada como referência e é identificada como estimativa.</div></div>
+        </>}
+        <Field label="IR manual (%)" hint="vazio = tabela regressiva"><input type="number" style={inputStyle} placeholder="automático" value={form.aliquotaIRManual} onChange={set('aliquotaIRManual')}/></Field>
+        {!tesouro&&<Field label="Override de taxa projetada (% a.a.)" hint="opcional"><input type="number" style={inputStyle} placeholder="deixe vazio" value={form.taxaOverrideAnual} onChange={set('taxaOverrideAnual')}/></Field>}
+        <Field label="Carteira / objetivo"><input style={inputStyle} placeholder="opcional" value={form.carteira} onChange={set('carteira')}/></Field>
+        <label style={{display:'flex',alignItems:'center',gap:8,gridColumn:'1 / -1',fontSize:12.5}}><input type="checkbox" checked={form.isentoIR} onChange={e=>setForm(f=>({...f,isentoIR:e.target.checked}))}/><span>Isento de IR</span></label>
+        <div style={{gridColumn:'1 / -1'}}><Field label="Observações"><textarea style={{...inputStyle,minHeight:58,resize:'vertical'}} placeholder="opcional" value={form.observacoes} onChange={set('observacoes')}/></Field></div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
-        <Field label="Instituição / emissor" hint="Selecione uma instituição já cadastrada para manter o nome e os consolidados consistentes."><select style={inputStyle} value={bancoExistente ? form.instituicao : '__novo__'} onChange={selecionarBanco}><option value="__novo__">+ Cadastrar nova instituição</option>{bancos.map(b=><option key={b} value={b}>{b}</option>)}</select>{!bancoExistente && <input style={{...inputStyle,marginTop:7}} placeholder="Nome exato da instituição" value={form.instituicao} onChange={set('instituicao')} />}</Field>
-        <Field label="Vincular a investimento existente" hint="Agrupa os aportes na visão do aplicativo, mas cada aporte mantém seu próprio cálculo."><select style={inputStyle} value={form.vincularA || ''} onChange={handleVincularChange}><option value="">Não vincular — novo investimento</option>{gruposExistentes.map(({ id, inv }) => <option key={id} value={id}>{inv.instituicao} · {inv.tipo} · {descricaoTaxa(inv, refTaxas)} · vence {fmtData(inv.dataVencimento)}</option>)}</select></Field>
-        <Field label="Tipo"><select style={inputStyle} value={form.tipo} onChange={e => onTipoChange(e.target.value)}>{TIPOS.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
-        <Field label="Indexador"><select style={inputStyle} value={form.indexador} onChange={set('indexador')}>{INDEXADORES.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
-        <Field label={parametroLabel(form.indexador)} hint={form.indexador === 'Prefixado' ? `DU/252 · taxa fixa efetiva: ${fmtPct(efetiva)} a.a.` : `taxa efetiva calculada: ${fmtPct(efetiva)} a.a.`}><input type="number" style={inputStyle} placeholder="Ex: 110" value={form.parametroValor} onChange={set('parametroValor')} /></Field>
-        <Field label="Data de aplicação"><input type="date" style={inputStyle} value={form.dataAplicacao} onChange={set('dataAplicacao')} /></Field>
-        <Field label="Data de vencimento"><input type="date" style={inputStyle} value={form.dataVencimento} onChange={set('dataVencimento')} /></Field>
-        <Field label="Valor aplicado (bruto)"><input type="number" style={inputStyle} placeholder="0,00" value={form.valorAplicado} onChange={set('valorAplicado')} /></Field>
-        <Field label="Liquidez"><select style={inputStyle} value={form.liquidez} onChange={set('liquidez')}>{LIQUIDEZ_OPTS.map(t => <option key={t} value={t}>{t}</option>)}</select></Field>
-        <Field label="Alíquota de IR manual (%)" hint="deixe vazio para usar a tabela regressiva automática"><input type="number" style={inputStyle} placeholder="automático" value={form.aliquotaIRManual} onChange={set('aliquotaIRManual')} /></Field>
-        <Field label="Override da taxa projetada (% a.a.)" hint="opcional"><input type="number" style={inputStyle} placeholder="deixe vazio" value={form.taxaOverrideAnual} onChange={set('taxaOverrideAnual')} /></Field>
-        <Field label="Carteira / objetivo" hint="opcional"><input style={inputStyle} placeholder="Ex: Reserva de emergência" value={form.carteira} onChange={set('carteira')} /></Field>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', marginTop: 4 }}><input type="checkbox" checked={form.isentoIR} onChange={e => setForm(f => ({ ...f, isentoIR: e.target.checked }))} /><span style={{ fontSize: 13 }}>Isento de Imposto de Renda (padrão para LCI/LCA/CRI/CRA)</span></label>
-        <div style={{ gridColumn: '1 / -1' }}><Field label="Observações"><textarea style={{ ...inputStyle, minHeight: 68, resize: 'vertical' }} placeholder="Notas livres…" value={form.observacoes} onChange={set('observacoes')} /></Field></div>
-      </div>
-      {formError && <p style={{ color: C.red, fontSize: 13, marginTop: 12 }}>{formError}</p>}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24 }}>
-        <button onClick={onClose} style={{ background: 'none', border: `1px solid ${C.hairline}`, color: C.muted, borderRadius: 10, padding: '10px 16px', cursor: 'pointer', fontSize: 13.5 }}>Cancelar</button>
-        <button onClick={onSave} style={{ background: C.lime, border: 'none', color: '#10160A', borderRadius: 10, padding: '10px 18px', cursor: 'pointer', fontWeight: 700, fontSize: 13.5 }}>{editingId ? 'Salvar alterações' : 'Adicionar aplicação'}</button>
-      </div>
+      {formError&&<p style={{color:C.red,fontSize:12.5,marginTop:12}}>{formError}</p>}
+      <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18}}><button onClick={onClose} style={{background:'none',border:`1px solid ${C.hairline}`,color:C.muted,borderRadius:9,padding:'9px 14px',cursor:'pointer'}}>Cancelar</button><button onClick={onSave} style={{background:C.lime,border:'none',color:'#10160A',borderRadius:9,padding:'9px 16px',cursor:'pointer',fontWeight:750}}>{editingId?'Salvar':'Adicionar'}</button></div>
     </div>
   </div>;
 }
