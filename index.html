@@ -11,8 +11,8 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<meta name="razao-version" content="2026-08-24-v11" />
-<link rel="apple-touch-icon" href="icon.png" />
+<meta name="razao-version" content="2026-08-24-v12" />
+<link rel="apple-touch-icon" href="icon-v11.png" />
 <link rel="manifest" href="manifest.json" />
 <style>
   * { box-sizing: border-box; }
@@ -36,6 +36,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.27.1/babel.min.js"></script>
+
+<style id="v12-clean-overrides">
+  body{background:radial-gradient(1200px 500px at 50% -160px,rgba(29,73,115,.22),transparent 62%),#070B10;}
+  button{font-family:inherit;}
+  .clean-brand{letter-spacing:.08em;}
+</style>
 </head>
 <body>
 <div id="root"></div>
@@ -98,12 +104,25 @@ function marcaInstituicao(nome){
   const n=normalizarInstituicao(nome);
   const hit=BANK_BRANDS.find(([key])=>n.includes(normalizarInstituicao(key)));
   if(hit) return {sigla:hit[1], cor:hit[2]};
-  const parts=String(nome||'').trim().split(/\s+/).filter(Boolean);
-  return {sigla:(parts.slice(0,2).map(x=>x[0]).join('')||'R').slice(0,3).toUpperCase(), cor:C.blue};
+  return {sigla:'', cor:C.blue};
+}
+function nomeInstituicao(nome){
+  const n=normalizarInstituicao(nome);
+  const mapa=[
+    ['BANCO DO BRASIL','Banco do Brasil'],['BTG PACTUAL','BTG Pactual'],['BTG','BTG Pactual'],
+    ['ITAÚ','Itaú'],['ITAU','Itaú'],['BRADESCO','Bradesco'],['SANTANDER','Santander'],
+    ['CAIXA','Caixa'],['NUBANK','Nubank'],['INTER','Inter'],['XP','XP'],['RICO','Rico'],
+    ['SAFRA','Safra'],['DAYCOVAL','Daycoval'],['BMG','BMG'],['PICPAY','PicPay'],['PAGBANK','PagBank'],
+    ['MERCADO PAGO','Mercado Pago'],['GENIAL','Genial'],['C6','C6 Bank']
+  ];
+  const hit=mapa.find(([key])=>n.includes(normalizarInstituicao(key)));
+  return hit ? hit[1] : String(nome||'').trim();
 }
 function InstitutionMark({nome,size=36}){
-  const b=marcaInstituicao(nome);
-  return <div title={nome} style={{width:size,height:size,borderRadius:Math.round(size*.28),background:b.cor+'22',border:`1px solid ${b.cor}55`,color:b.cor,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:Math.max(10,size*.30),letterSpacing:'-.03em',flexShrink:0}}>{b.sigla}</div>;
+  // Para manter a interface clean, não usamos siglas genéricas.
+  // Marcas oficiais só são exibidas quando houver um ativo visual explícito;
+  // caso contrário, nenhum quadrado/letter-avatar é criado.
+  return null;
 }
 const PERIODOS=[['mes','Mês'],['ano','Ano'],['todo','Todo o período']];
 function inicioPeriodo(periodo,today,investments){
@@ -963,7 +982,6 @@ function Dashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today,
   const abaixo=ativos.filter(i=>i.indexador==='CDI'&&!i.isentoIR&&Number(i.parametroValor)>0&&Number(i.parametroValor)<90);
   if(abaixo.length) insights.push({t:'Revisar taxas',d:`${abaixo.length} posição(ões) estão abaixo de 90% do CDI.`,c:'#F06A6A'});
   if(!insights.length) insights.push({t:'Carteira em ordem',d:'Nenhum ponto prioritário encontrado pelas regras atuais.',c:'#45D6A2'});
-  const logoOnly=(g)=><InstitutionMark nome={g.nome} size={40}/>;
   return <div style={{display:'flex',flexDirection:'column',gap:12}}>
     <section style={{background:'linear-gradient(135deg,#102033,#0B1420)',border:'1px solid rgba(215,168,74,.24)',borderRadius:20,padding:'18px 17px',boxShadow:'0 16px 40px rgba(0,0,0,.24)'}}>
       <div style={{fontSize:10,color:'#D7A84A',fontWeight:800,letterSpacing:1.2,textTransform:'uppercase'}}>Patrimônio líquido</div>
@@ -979,7 +997,7 @@ function Dashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today,
     </section>
     <section style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(250px,1fr))',gap:10}}>
       <Panel title="Instituições" subtitle="consolidado por emissor">
-        <div style={{display:'flex',flexDirection:'column',gap:7}}>{grupos.slice(0,5).map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:9,alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${C.hairline}`}}>{logoOnly(g)}<div><div style={{fontSize:12,fontWeight:800}}>{marcaInstituicao(g.nome).sigla}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} posições · {fmtPct(g.liquido/totais.liquido*100)}</div></div><div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5}}>{fmtBRL(g.liquido)}</div></div>)}</div>
+        <div style={{display:'flex',flexDirection:'column',gap:7}}>{grupos.slice(0,5).map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:9,alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${C.hairline}`}}><div><div style={{fontSize:12,fontWeight:800}}>{nomeInstituicao(g.nome)}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} posições · {fmtPct(g.liquido/totais.liquido*100)}</div></div><div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5}}>{fmtBRL(g.liquido)}</div></div>)}</div>
         {grupos.length>5&&<button onClick={()=>setTab('lista')} style={{marginTop:8,background:'transparent',border:'none',color:'#D7A84A',fontSize:10.5,fontWeight:750,cursor:'pointer'}}>Ver todas</button>}
       </Panel>
       <Panel title="Leitura rápida" subtitle="somente o que merece atenção">
@@ -994,7 +1012,7 @@ function Dashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today,
   </div>;
 }
 function MetricTile({label,value,accent}){return <div style={{background:C.panel2,borderRadius:9,padding:'10px 11px'}}><div style={{fontSize:9.5,color:C.muted,textTransform:'uppercase',fontWeight:800}}>{label}</div><div style={{fontFamily:"'IBM Plex Mono', monospace",fontSize:15,fontWeight:700,color:accent||C.text,marginTop:4}}>{value}</div></div>}
-function CompactInvestmentTable({items,metricsById,mode,refTaxas}){return <div>{items.map(i=>{const m=metricsById[i.id];return <div key={i.id} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:9,alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${C.hairline}`}}><InstitutionMark nome={i.instituicao} size={28}/><div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{i.tituloTesouro||i.tipo} · {i.instituicao}</div><div style={{fontSize:9.5,color:C.muted}}>{descricaoTaxa(i,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:m.rentLiquidaMensal>=0?(mode==='best'?C.lime:C.text):C.red}}>{fmtPct(m.rentLiquidaMensal)}<div style={{fontSize:8.5,color:C.muted}}>líq./mês</div></div></div>})}</div>}
+function CompactInvestmentTable({items,metricsById,mode,refTaxas}){return <div>{items.map(i=>{const m=metricsById[i.id];return <div key={i.id} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:9,alignItems:'center',padding:'7px 0',borderBottom:`1px solid ${C.hairline}`}}><div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{i.tituloTesouro||i.tipo} · {i.instituicao}</div><div style={{fontSize:9.5,color:C.muted}}>{descricaoTaxa(i,refTaxas)} · {fmtBRL(m.valorAtualLiquido)}</div></div><div style={{textAlign:'right',fontFamily:"'IBM Plex Mono', monospace",fontSize:11.5,color:m.rentLiquidaMensal>=0?(mode==='best'?C.lime:C.text):C.red}}>{fmtPct(m.rentLiquidaMensal)}<div style={{fontSize:8.5,color:C.muted}}>líq./mês</div></div></div>})}</div>}
 
 function RankingTab({ investments, ativos, metricsById, refTaxas }){
   const [filtroInst,setFiltroInst]=useState('Todas');
@@ -1013,7 +1031,7 @@ function RankingTab({ investments, ativos, metricsById, refTaxas }){
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:7,marginTop:9}}><MetricTile label="Carteira" value={fmtPct(retorno)} accent={retorno!==null&&retorno>=0?'#45D6A2':'#F06A6A'}/><MetricTile label="CDI" value={fmtPct(cdi)}/><MetricTile label="Diferença" value={fmtPct(dif)} accent={dif!==null&&dif>=0?'#45D6A2':'#F06A6A'}/><MetricTile label="% CDI" value={pct===null?'—':fmtPct(pct)} accent={pct!==null&&pct>=100?'#45D6A2':'#F3B55B'}/></div>
       <div style={{fontSize:9.5,color:C.muted,marginTop:8}}>Período: {fmtData(inicio)} → {fmtData(hoje)} · comparação bruta com CDI · {rows.length} posição(ões).</div>
     </Panel>
-    <Panel title="Por instituição" subtitle="consolidação do filtro atual"><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:7}}>{grupos.map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'auto 1fr auto',gap:8,alignItems:'center',background:C.panel2,borderRadius:11,padding:'9px 10px'}}><InstitutionMark nome={g.nome} size={32}/><div><div style={{fontSize:11.5,fontWeight:800}}>{marcaInstituicao(g.nome).sigla}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} posições</div></div><div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5}}>{fmtBRL(g.liquido)}</div></div>)}</div></Panel>
+    <Panel title="Por instituição" subtitle="consolidação do filtro atual"><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:7}}>{grupos.map(g=><div key={g.key} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8,alignItems:'center',background:C.panel2,borderRadius:11,padding:'9px 10px'}}><div><div style={{fontSize:11.5,fontWeight:800}}>{nomeInstituicao(g.nome)}</div><div style={{fontSize:9.5,color:C.muted}}>{g.items.length} posições</div></div><div style={{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5}}>{fmtBRL(g.liquido)}</div></div>)}</div></Panel>
     <Panel title="Comparativo" subtitle="rentabilidade líquida mensal e posição atual"><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',minWidth:650}}><thead><tr>{['','Aplicação','Líquido/mês','% CDI líq.','Atual líquido','Vencimento'].map(h=><th key={h} style={{textAlign:'left',color:C.muted,fontSize:9,textTransform:'uppercase',padding:'7px 6px',borderBottom:`1px solid ${C.hairline}`,whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead><tbody>{rows.map(i=>{const m=metricsById[i.id];return <tr key={i.id}><td style={{padding:'7px 6px'}}><InstitutionMark nome={i.instituicao} size={27}/></td><td style={{padding:'7px 6px',fontSize:10.5}}><b>{i.tituloTesouro||i.tipo}</b><div style={{fontSize:8.8,color:C.muted}}>{marcaInstituicao(i.instituicao).sigla} · {descricaoTaxa(i,refTaxas)}</div></td><td style={{padding:'7px 6px',fontFamily:"'IBM Plex Mono',monospace",fontSize:10.5,color:m.rentLiquidaMensal>=0?'#45D6A2':'#F06A6A'}}>{fmtPct(m.rentLiquidaMensal)}</td><td style={{padding:'7px 6px',fontFamily:"'IBM Plex Mono',monospace",fontSize:10.5}}>{m.pctCDILiquido==null?'—':fmtPct(m.pctCDILiquido)}</td><td style={{padding:'7px 6px',fontFamily:"'IBM Plex Mono',monospace",fontSize:10.5}}>{fmtBRL(m.valorAtualLiquido)}</td><td style={{padding:'7px 6px',fontSize:9.5}}>{fmtData(i.dataVencimento)}</td></tr>})}</tbody></table></div></Panel>
   </div>;
 }
@@ -1044,7 +1062,7 @@ function ListaAplicacoes({ investments, filtro, setFiltro, metricsById, refTaxas
 }
 function InstitutionGroup({group,metricsById,expandedId,setExpandedId,openEdit,deleteInvestment,historicoDraft,setHistoricoDraft,addHistorico,resgatandoId,setResgatandoId,resgateDraft,setResgateDraft,confirmResgate,reabrir,refTaxas}){
   const [open,setOpen]=useState(true); return <section style={{background:C.panel,borderRadius:14,padding:13,boxShadow:shadow,borderTop:`1px solid ${C.hairline}`}}>
-    <button onClick={()=>setOpen(!open)} style={{width:'100%',background:'none',border:'none',color:C.text,cursor:'pointer',display:'grid',gridTemplateColumns:'auto 1fr auto',gap:10,alignItems:'center',textAlign:'left',padding:0}}><InstitutionMark nome={group.nome} size={38}/><div><div style={{fontSize:14,fontWeight:800}}>{group.nome}</div><div style={{fontSize:10,color:C.muted}}>{group.items.length} aplicação(ões) · {fmtBRL(group.liquido)} líquido · {fmtPct(group.rent)} acumulado</div></div><Icon name={open?'chevronUp':'chevronDown'} size={16} color={C.muted}/></button>
+    <button onClick={()=>setOpen(!open)} style={{width:'100%',background:'none',border:'none',color:C.text,cursor:'pointer',display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center',textAlign:'left',padding:0}}><div><div style={{fontSize:14,fontWeight:800}}>{nomeInstituicao(group.nome)}</div><div style={{fontSize:10,color:C.muted}}>{group.items.length} aplicação(ões) · {fmtBRL(group.liquido)} líquido · {fmtPct(group.rent)} acumulado</div></div><Icon name={open?'chevronUp':'chevronDown'} size={16} color={C.muted}/></button>
     {open&&<div style={{marginTop:10,borderTop:`1px solid ${C.hairline}`,paddingTop:6}}>{group.items.sort((a,b)=>a.dataVencimento.localeCompare(b.dataVencimento)).map(inv=><InvestmentCompact key={inv.id} inv={inv} metricsById={metricsById} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir} refTaxas={refTaxas}/>)}</div>}
   </section>;
 }
