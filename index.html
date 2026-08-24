@@ -11,7 +11,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<meta name="razao-version" content="2026-08-24-v9" />
+<meta name="razao-version" content="2026-08-24-v10" />
 <link rel="apple-touch-icon" href="icon.png" />
 <link rel="manifest" href="manifest.json" />
 <style>
@@ -597,6 +597,35 @@ function TaxasBar({ refTaxas, status, onRefresh }){
   </div>;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Backup / migração de dados                                          */
+/* ------------------------------------------------------------------ */
+const BACKUP_VERSION = 1;
+function criarBackupPayload() {
+  const investments = JSON.parse(localStorage.getItem('rf-investimentos') || '[]');
+  const taxas = JSON.parse(localStorage.getItem('rf-taxas-referencia') || 'null');
+  return { app: 'Razão — Renda Fixa', backupVersion: BACKUP_VERSION, exportedAt: new Date().toISOString(), investments, taxas };
+}
+function baixarBackup() {
+  const payload = criarBackupPayload();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `razao-renda-fixa-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function lerBackupArquivo(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => { try { resolve(JSON.parse(reader.result)); } catch (e) { reject(new Error('Arquivo de backup inválido.')); } };
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
+    reader.readAsText(file);
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* App                                                                   */
 /* ------------------------------------------------------------------ */
@@ -620,6 +649,26 @@ function App() {
   // Mantém a data de cálculo atualizada enquanto o PWA permanece aberto.
   const [today, setToday] = useState(todayStr());
   const [historicoTick, setHistoricoTick] = useState(0);
+  const [showDados, setShowDados] = useState(false);
+  const [backupMsg, setBackupMsg] = useState('');
+
+  function exportarBackup() {
+    try { baixarBackup(); setBackupMsg('Backup exportado.'); }
+    catch (e) { setBackupMsg('Não foi possível exportar o backup.'); }
+  }
+  async function importarBackup(file) {
+    try {
+      const payload = await lerBackupArquivo(file);
+      if (!payload || payload.app !== 'Razão — Renda Fixa' || !Array.isArray(payload.investments)) throw new Error('Este arquivo não é um backup válido do Razão.');
+      if (!window.confirm(`Importar ${payload.investments.length} investimento(s)? Isso substituirá os dados atuais desta instalação.`)) return;
+      await storage.set('rf-investimentos', JSON.stringify(payload.investments));
+      if (payload.taxas) await storage.set('rf-taxas-referencia', JSON.stringify(payload.taxas));
+      setInvestments(payload.investments);
+      if (payload.taxas) setRefTaxas(payload.taxas);
+      setBackupMsg(`Importados ${payload.investments.length} investimento(s).`);
+      setShowDados(true);
+    } catch (e) { setBackupMsg(e.message || 'Falha ao importar backup.'); setShowDados(true); }
+  }
 
   const refreshTaxas = useCallback(() => {
     setTaxaStatus('carregando');
@@ -755,7 +804,7 @@ function App() {
     <header style={{background:C.bg,position:'sticky',top:0,zIndex:10,paddingTop:'env(safe-area-inset-top)'}}>
       <div style={{maxWidth:1100,margin:'0 auto',padding:'12px 14px 4px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
         <div style={{display:'flex',alignItems:'center',gap:9}}><div style={{width:30,height:30,borderRadius:9,background:C.lime,color:'#10160A',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900}}>R</div><div><div style={{fontWeight:800,fontSize:14}}>Razão</div><div style={{color:C.muted,fontSize:9.5}}>Renda fixa, sem excesso</div></div></div>
-        <button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'8px 11px',fontWeight:800,fontSize:11.5,cursor:'pointer'}}><Icon name="plus" size={13}/> Nova</button>
+        <button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'8px 11px',fontWeight:800,fontSize:11.5,cursor:'pointer'}}><Icon name="plus" size={13}/> Nova</button><button onClick={()=>{setBackupMsg('');setShowDados(true)}} style={{background:C.panel2,color:C.text,border:`1px solid ${C.hairline}`,borderRadius:9,padding:'8px 10px',fontWeight:750,fontSize:11.5,cursor:'pointer'}}><Icon name="download" size={13}/> Dados</button>
       </div>
       <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTudo} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length}/>
       <div style={{maxWidth:1100,margin:'0 auto',display:'flex',gap:3,padding:'0 10px 8px',overflowX:'auto'}}>{[['painel','Visão','grid'],['ranking','Análise','listOrdered'],['lista','Aplicações','listChecks']].map(([t,l,ic])=><button key={t} onClick={()=>setTab(t)} style={{flex:'0 0 auto',background:tab===t?C.panel:'transparent',border:'none',borderRadius:8,padding:'7px 11px',color:tab===t?C.lime:C.muted,fontWeight:750,fontSize:11.5,cursor:'pointer',display:'flex',gap:5,alignItems:'center'}}><Icon name={ic} size={13}/>{l}</button>)}</div>
@@ -764,6 +813,7 @@ function App() {
       {loading?<div style={{color:C.muted,padding:40,textAlign:'center'}}>Carregando…</div>:investments.length===0?<div style={{background:C.panel,borderRadius:14,padding:42,textAlign:'center'}}><Icon name="wallet" size={25} color={C.lime}/><p style={{fontWeight:800}}>Nenhuma aplicação</p><p style={{color:C.muted,fontSize:12}}>Cadastre sua primeira posição.</p><button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'9px 14px',fontWeight:800}}>Adicionar</button></div>:
       <>{tab==='painel'&&<Dashboard ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={refComHistorico} today={today} investments={investments}/>} {tab==='ranking'&&<RankingTab investments={investments} ativos={ativos} metricsById={metricsById} refTaxas={refComHistorico}/>} {tab==='lista'&&<ListaAplicacoes investments={investments} filtro={filtro} setFiltro={setFiltro} metricsById={metricsById} refTaxas={refComHistorico} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir}/>}</>}
     </main>
+    {showDados&&<DadosModal onClose={()=>setShowDados(false)} onExport={exportarBackup} onImport={importarBackup} message={backupMsg}/>}
     {showForm&&<FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={refComHistorico} investments={investments} onClose={()=>setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange}/>} 
   </div>;
 }
@@ -960,6 +1010,20 @@ function InvestmentCompact({inv,metricsById,expandedId,setExpandedId,openEdit,de
  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginTop:9}}><Mini label="Atual líquido" value={fmtBRL(m.valorAtualLiquido)} accent={C.lime}/><Mini label="Líquido/mês" value={fmtPct(m.rentLiquidaMensal)} accent={m.rentLiquidaMensal>=0?C.lime:C.red}/><Mini label="Atual bruto" value={fmtBRL(m.valorAtualBruto)}/><Mini label="Vencimento" value={fmtData(inv.dataVencimento)}/></div>
  {expanded&&<div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.hairline}`,display:'grid',gap:10}}><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:8}}><Mini label="Aplicado" value={fmtBRL(inv.valorAplicado)}/><Mini label="Ganho líquido" value={fmtBRL(m.valorAtualLiquido-inv.valorAplicado)} accent={m.valorAtualLiquido>=inv.valorAplicado?C.lime:C.red}/><Mini label="Est. líquido venc." value={fmtBRL(m.valorEstLiquidoVenc)} accent={C.blue}/><Mini label="% CDI líquido" value={m.pctCDILiquido==null?'—':fmtPct(m.pctCDILiquido)}/>{inv.tipo==='Tesouro Direto'&&<Mini label="Custódia est. no venc." value={fmtBRL(m.custodiaVenc)} accent={C.muted}/>}</div>{inv.tipo==='Tesouro Direto'&&<div style={{fontSize:10,color:C.muted}}>Valor atual marcado a mercado{m.precisao!=='estimado'?` · ${m.precisao.replace('mercado-','')}`:''}. A projeção de vencimento é estimativa pela taxa contratada.</div>}<div style={{display:'flex',justifyContent:'flex-end',gap:5}}><IconBtn onClick={()=>deleteInvestment(inv.id)} title="Excluir" danger><Icon name="trash" size={13}/></IconBtn></div></div>}
  </div>;
+}
+
+
+function DadosModal({ onClose, onExport, onImport, message }) {
+  const inputRef = React.useRef(null);
+  return <div style={{position:'fixed',inset:0,background:'#000000C8',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'max(20px,env(safe-area-inset-top)) 14px 28px',overflowY:'auto',zIndex:60}}>
+    <div style={{background:C.panel,borderRadius:18,width:'100%',maxWidth:520,padding:20,boxShadow:shadow,borderTop:`1px solid ${C.hairline}`}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}><div><h2 style={{fontSize:17,fontWeight:800,margin:0}}>Dados e backup</h2><div style={{fontSize:11,color:C.muted,marginTop:3}}>Use isso para migrar seus investimentos entre versões ou instalações.</div></div><button onClick={onClose} style={{background:'none',border:'none',color:C.muted,cursor:'pointer'}}><Icon name="x" size={19}/></button></div>
+      <div style={{background:C.panel2,borderRadius:12,padding:13,marginBottom:10}}><div style={{fontWeight:800,fontSize:12}}>Exportar</div><div style={{fontSize:11,color:C.muted,lineHeight:1.45,margin:'5px 0 10px'}}>Cria um arquivo JSON com investimentos, aportes vinculados e taxas salvas. Guarde esse arquivo fora do aparelho.</div><button onClick={onExport} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'9px 12px',fontWeight:800,cursor:'pointer'}}>Exportar backup</button></div>
+      <div style={{background:C.panel2,borderRadius:12,padding:13}}><div style={{fontWeight:800,fontSize:12}}>Importar</div><div style={{fontSize:11,color:C.muted,lineHeight:1.45,margin:'5px 0 10px'}}>Importar substitui os dados desta instalação. Faça um backup antes se já houver aplicações cadastradas.</div><input ref={inputRef} type="file" accept="application/json,.json" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)onImport(f);e.target.value='';}}/><button onClick={()=>inputRef.current?.click()} style={{background:'transparent',color:C.text,border:`1px solid ${C.hairline}`,borderRadius:9,padding:'9px 12px',fontWeight:750,cursor:'pointer'}}>Escolher backup</button></div>
+      {message&&<div style={{marginTop:12,fontSize:11.5,color:C.lime,lineHeight:1.45}}>{message}</div>}
+      <div style={{marginTop:14,fontSize:10.5,color:C.muted,lineHeight:1.45}}>O backup é local: seus dados não são enviados para o GitHub nem para um servidor.</div>
+    </div>
+  </div>;
 }
 
 function FormModal({ form, setForm, editingId, formError, refTaxas, investments, onClose, onSave, onTipoChange }) {
