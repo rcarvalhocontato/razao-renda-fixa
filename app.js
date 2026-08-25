@@ -58,7 +58,11 @@ function nomeInstituicao(nome) {
     const hit = mapa.find(([key]) => n.includes(normalizarInstituicao(key)));
     return hit ? hit[1] : String(nome || '').trim();
 }
-function InstitutionMark() { return null; }
+function InstitutionMark({ nome, size = 27 }) {
+    const { sigla, cor } = marcaInstituicao(nome);
+    const letra = sigla || nomeInstituicao(nome).slice(0, 2).toUpperCase();
+    return React.createElement("div", { className: "inst-mark", style: { width: size, height: size, fontSize: Math.max(9, size * 0.34), background: cor + '26', color: cor, border: `1px solid ${cor}55` } }, letra);
+}
 const PERIODOS = [['mes', 'Mês'], ['ano', 'Ano'], ['todo', 'Todo o período']];
 function inicioPeriodo(periodo, today, investments) {
     if (periodo === 'dia')
@@ -1094,12 +1098,14 @@ function ReferenceApplications({ ativos, metricsById, setTab, onNew, openEdit, d
         return React.createElement("div", { className: "screen" },
             React.createElement("button", { className: "back-btn", onClick: () => setSelected(null) }, "\u2039 Aplica\u00E7\u00F5es"),
             React.createElement(RefCard, { className: "institution-hero" },
-                React.createElement("div", null,
-                    React.createElement("div", { className: "eyebrow" }, "Institui\u00E7\u00E3o"),
-                    React.createElement("h1", null, nomeInstituicao(g.nome)),
-                    React.createElement("span", null,
-                        g.items.length,
-                        " investimentos")),
+                React.createElement("div", { className: "inst-head-left" },
+                    React.createElement(InstitutionMark, { nome: g.nome, size: 44 }),
+                    React.createElement("div", null,
+                        React.createElement("div", { className: "eyebrow" }, "Institui\u00E7\u00E3o"),
+                        React.createElement("h1", null, nomeInstituicao(g.nome)),
+                        React.createElement("span", null,
+                            g.items.length,
+                            " investimentos"))),
                 React.createElement("div", { className: "inst-total" },
                     fmtBRL(g.liquido),
                     React.createElement("small", null,
@@ -1144,6 +1150,7 @@ function ReferenceApplications({ ativos, metricsById, setTab, onNew, openEdit, d
         React.createElement("div", { className: "subhead" }, "Por institui\u00E7\u00E3o"),
         React.createElement("div", { className: "institution-list" }, grupos.map(g => React.createElement("button", { className: "institution-row", key: g.key, onClick: () => setSelected(g.key) },
             React.createElement("div", { className: "brandless" },
+                React.createElement(InstitutionMark, { nome: g.nome, size: 34 }),
                 React.createElement("div", null,
                     React.createElement("b", null, nomeInstituicao(g.nome)),
                     React.createElement("small", null,
@@ -1229,11 +1236,13 @@ function ReferenceInstitutions({ ativos, metricsById, setTab }) {
                         React.createElement("h2", null, "Emissores"),
                         React.createElement("p", null, "Concentra\u00E7\u00E3o da carteira"))),
                 React.createElement("div", { className: "issuer-table" }, grupos.map(g => React.createElement("button", { key: g.key, className: "issuer-row", onClick: () => setTab('aplicacoes') },
-                    React.createElement("div", null,
-                        React.createElement("b", null, nomeInstituicao(g.nome)),
-                        React.createElement("span", null,
-                            g.items.length,
-                            " investimentos")),
+                    React.createElement("div", { className: "issuer-left" },
+                        React.createElement(InstitutionMark, { nome: g.nome, size: 30 }),
+                        React.createElement("div", null,
+                            React.createElement("b", null, nomeInstituicao(g.nome)),
+                            React.createElement("span", null,
+                                g.items.length,
+                                " investimentos"))),
                     React.createElement("div", null,
                         React.createElement("strong", null, fmtBRL(g.liquido)),
                         React.createElement("small", null, fmtPct(g.liquido / total * 100)))))))));
