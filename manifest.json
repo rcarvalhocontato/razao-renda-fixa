@@ -1,1 +1,22 @@
-{"name":"Razão — Renda Fixa","short_name":"Razão","start_url":"./","display":"standalone","background_color":"#0A0D12","theme_color":"#08111C","icons":[{"src":"icon-v14.png","sizes":"512x512","type":"image/png"},{"src":"icon-v14-180.png","sizes":"180x180","type":"image/png"}]}
+{
+  "name": "Razão — Renda Fixa",
+  "short_name": "Razão",
+  "start_url": "./?v=15.0",
+  "display": "standalone",
+  "background_color": "#07111c",
+  "theme_color": "#07111c",
+  "icons": [
+    {
+      "src": "icon-v14.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-v14-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
