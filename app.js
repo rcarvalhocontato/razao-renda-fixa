@@ -180,6 +180,10 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
             React.createElement("path", { d: "M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5" }),
             React.createElement("path", { d: "M18 12h.01" })),
         check: React.createElement("path", { d: "m5 13 4 4L19 7" }),
+        info: React.createElement(React.Fragment, null,
+            React.createElement("circle", { cx: "12", cy: "12", r: "10" }),
+            React.createElement("path", { d: "M12 16v-4" }),
+            React.createElement("path", { d: "M12 8h.01" })),
         trophy: React.createElement(React.Fragment, null,
             React.createElement("path", { d: "M8 21h8" }),
             React.createElement("path", { d: "M12 17v4" }),
@@ -793,6 +797,45 @@ function periodReturnMD(ativos, inicio, fim, ref, today, metricsById) {
     const den = V0 + weightedCF;
     return den > 0 ? ((V1 - V0 - CF) / den) * 100 : null;
 }
+// Benchmark de CDI comparável ao retorno da carteira (Modified Dietz).
+// Simula uma carteira hipotética que recebeu exatamente os mesmos aportes,
+// nas mesmas datas, rendendo 100% do CDI — assim a comparação "carteira x CDI"
+// não fica distorcida por aportes recentes (sem isso, um aporte novo faz o CDI
+// de referência contar o período inteiro, inflando artificialmente a diferença).
+function cdiReturnMD(ativos, inicio, fim, ref, today) {
+    if (!inicio || !fim || inicio >= fim)
+        return null;
+    if (!ref.historicoCDI || !ref.historicoCDI.length) {
+        // Sem histórico diário disponível (ex.: offline ou API do BCB fora do ar):
+        // aproxima usando a taxa CDI anual atual, composta pelo número de dias corridos.
+        if (!(ref.cdi > 0))
+            return null;
+        const dias = Math.max(diffDays(inicio, fim), 0);
+        return (Math.pow(1 + ref.cdi / 100, dias / 365) - 1) * 100;
+    }
+    const totalDays = Math.max(diffDays(inicio, fim), 1);
+    let V0 = 0, V1 = 0, CF = 0, weightedCF = 0;
+    ativos.forEach(inv => {
+        if (inv.dataAplicacao > fim)
+            return;
+        const aporte = Number(inv.valorAplicado) || 0;
+        if (!(aporte > 0))
+            return;
+        if (inv.dataAplicacao < inicio) {
+            const vi = aporte * fatorAcumulado(ref.historicoCDI, inv.dataAplicacao, inicio, 1, true);
+            V0 += vi;
+            V1 += vi * fatorAcumulado(ref.historicoCDI, inicio, fim, 1, false);
+        }
+        else {
+            CF += aporte;
+            const w = Math.max(0, Math.min(1, diffDays(inv.dataAplicacao, fim) / totalDays));
+            weightedCF += aporte * w;
+            V1 += aporte * fatorAcumulado(ref.historicoCDI, inv.dataAplicacao, fim, 1, true);
+        }
+    });
+    const den = V0 + weightedCF;
+    return den > 0 ? ((V1 - V0 - CF) / den) * 100 : null;
+}
 function periodLabel(period) { return period === 'mes' ? 'Mês' : period === 'ano' ? 'Ano' : 'Todo o período'; }
 function periodStart(period, today, ativos) {
     if (period === 'mes')
@@ -868,7 +911,7 @@ function PerformanceBars({ ativos, refTaxas, today, period }) {
         const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
         const fim = last > end ? today : last.toISOString().slice(0, 10);
         const r = periodReturnMD(ativos, ini, fim, refTaxas, today, {});
-        const c = periodoCDIExato(refTaxas, ini, fim);
+        const c = cdiReturnMD(ativos, ini, fim, refTaxas, today);
         months.push({ label: MESES_ABREV[d.getMonth()], r: r ?? 0, c: c ?? 0 });
     }
     const max = Math.max(0.1, ...months.flatMap(x => [x.r, x.c]));
@@ -926,7 +969,7 @@ function ReferenceHeader({ refTaxas, status, onRefresh, onNew, onDados, tab, set
 }
 function RefCard({ children, className = '' }) { return React.createElement("section", { className: 'ref-card ' + className }, children); }
 function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today, evolucao, setTab, period, setPeriod }) {
-    const start = periodStart(period, today, ativos), ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = periodoCDIExato(refTaxas, start, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
+    const start = periodStart(period, today, ativos), ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = cdiReturnMD(ativos, start, today, refTaxas, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
     const grupos = grupoInstituicoes(ativos, metricsById);
     const total = totais.liquido || 1;
     const donutItems = grupos.map((g, i) => ({ name: nomeInstituicao(g.nome), value: g.liquido, color: ['#157EFF', '#20C997', '#F6B73C', '#8B5CF6', '#FF5D73', '#16B7D8'][i % 6] }));
@@ -1165,10 +1208,55 @@ function ReferenceApplications({ ativos, metricsById, setTab, onNew, openEdit, d
                     " acumulado")),
             React.createElement("span", null, "\u203A")))));
 }
+function monthsAgoISO(dateStr, n) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setMonth(d.getMonth() - n);
+    return d.toISOString().slice(0, 10);
+}
+function rentabilidadeAcumuladaPeriods(ativos, refTaxas, today) {
+    const defs = [
+        ['1m', '1 mês', monthsAgoISO(today, 1)],
+        ['3m', '3 meses', monthsAgoISO(today, 3)],
+        ['6m', '6 meses', monthsAgoISO(today, 6)],
+        ['12m', '12 meses', monthsAgoISO(today, 12)],
+        ['inicio', 'Desde o início', periodStart('todo', today, ativos)],
+    ];
+    return defs.map(([key, label, start]) => {
+        const ret = periodReturnMD(ativos, start, today, refTaxas, today, {});
+        const cdi = cdiReturnMD(ativos, start, today, refTaxas, today);
+        const pctCDI = ret != null && cdi > 0 ? (ret / cdi) * 100 : null;
+        return { key, label, ret, cdi, pctCDI };
+    });
+}
+function ReferenceAccumulatedTable({ ativos, refTaxas, today }) {
+    const rows = rentabilidadeAcumuladaPeriods(ativos, refTaxas, today);
+    const doze = rows.find(r => r.key === '12m');
+    const destaque = (doze && doze.ret != null && doze.cdi != null) ? doze : [...rows].reverse().find(r => r.ret != null && r.cdi != null);
+    const acima = destaque ? destaque.ret - destaque.cdi >= 0 : null;
+    return React.createElement(RefCard, null,
+        React.createElement("div", { className: "section-head" },
+            React.createElement("div", null,
+                React.createElement("h2", null, "Rentabilidade acumulada"),
+                React.createElement("p", null, "Retorno l\u00EDquido da carteira x CDI por janela de tempo"))),
+        React.createElement("div", { className: "accum-table" },
+            rows.map(r => React.createElement("div", { className: "accum-row", key: r.key },
+                React.createElement("span", { className: "accum-label" }, r.label),
+                React.createElement("strong", { className: r.ret != null && r.cdi != null && r.ret < r.cdi ? 'warn' : 'green-txt' }, r.ret == null ? '\u2014' : fmtPct(r.ret)),
+                React.createElement("span", { className: "accum-badge" + (r.pctCDI != null && r.pctCDI < 100 ? ' below' : '') }, r.pctCDI == null ? '\u2014' : fmtPct(r.pctCDI) + ' CDI')))),
+        destaque ? React.createElement("div", { className: "accum-callout" + (acima ? '' : ' warn-bg') },
+            React.createElement(Icon, { name: "info", size: 15 }),
+            React.createElement("span", null,
+                "Sua carteira est\u00E1 ",
+                React.createElement("b", null, fmtPct(Math.abs(destaque.ret - destaque.cdi))),
+                acima ? ' acima' : ' abaixo',
+                " do CDI no acumulado de ",
+                destaque.label.toLowerCase(),
+                ".")) : null);
+}
 function ReferenceAnalysis({ ativos, metricsById, refTaxas, today }) {
     const [period, setPeriod] = useState('mes'), [group, setGroup] = useState('tipo');
     const start = periodStart(period, today, ativos);
-    const ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = periodoCDIExato(refTaxas, start, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
+    const ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = cdiReturnMD(ativos, start, today, refTaxas, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
     const groups = {};
     ativos.forEach(inv => { const key = group === 'tipo' ? inv.tipo : normalizarInstituicao(inv.instituicao); if (!groups[key])
         groups[key] = []; groups[key].push(inv); });
@@ -1200,6 +1288,7 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today }) {
                         periodLabel(period),
                         " \u00B7 retorno bruto com fluxos tratados como aportes"))),
             React.createElement(PerformanceBars, { ativos: ativos, refTaxas: refTaxas, today: today, period: period })),
+        React.createElement(ReferenceAccumulatedTable, { ativos: ativos, refTaxas: refTaxas, today: today }),
         React.createElement(RefCard, null,
             React.createElement("div", { className: "section-head" },
                 React.createElement("div", null,
@@ -1293,7 +1382,12 @@ function App() {
         setHistoricoTick(x => x + 1);
         refreshTaxas();
     } }; document.addEventListener('visibilitychange', vis); return () => { clearInterval(it); document.removeEventListener('visibilitychange', vis); }; }, []);
-    const minDataCDI = useMemo(() => investments.filter(i => i.indexador === 'CDI').map(i => i.dataAplicacao).sort()[0] || null, [investments]), minDataSelic = useMemo(() => investments.filter(i => i.indexador === 'SELIC').map(i => i.dataAplicacao).sort()[0] || null, [investments]);
+    // O histórico de CDI precisa cobrir desde o investimento mais antigo da
+    // carteira (não só os indexados a CDI), porque ele também é usado como
+    // referência de comparação ("desde o início") para a carteira inteira.
+    // Sem isso, se o investimento mais antigo for Prefixado/Tesouro, o CDI de
+    // comparação ficava artificialmente baixo (faltando o início do período).
+    const minDataCDI = useMemo(() => investments.map(i => i.dataAplicacao).filter(Boolean).sort()[0] || null, [investments]), minDataSelic = useMemo(() => investments.filter(i => i.indexador === 'SELIC').map(i => i.dataAplicacao).sort()[0] || null, [investments]);
     useEffect(() => { let cancel = false; (async () => { try {
         const [cdi, selic] = await Promise.all([minDataCDI ? fetchHistoricoDiario(12, minDataCDI, today) : Promise.resolve([]), minDataSelic ? fetchHistoricoDiario(11, minDataSelic, today) : Promise.resolve([])]);
         if (!cancel)

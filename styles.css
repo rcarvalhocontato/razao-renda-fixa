@@ -437,6 +437,47 @@ b, strong { font-variant-numeric: tabular-nums; }
 .institution-row > span:last-child { color: var(--muted); }
 .subhead { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 4px; }
 
+.accum-table { display: flex; flex-direction: column; }
+.accum-row {
+  display: grid;
+  grid-template-columns: 1.3fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--hairline);
+}
+.accum-row:last-child { border-bottom: none; }
+.accum-label { font-size: 12.5px; color: var(--muted-light); font-weight: 600; }
+.accum-row strong { font-size: 14px; font-weight: 800; text-align: right; }
+.accum-badge {
+  font-size: 10.5px;
+  font-weight: 750;
+  color: var(--lime);
+  background: rgba(198,241,53,0.12);
+  border-radius: 20px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+.accum-badge.below { color: var(--red); background: rgba(240,85,93,0.12); }
+.accum-callout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: rgba(91,157,240,0.10);
+  border: 1px solid rgba(91,157,240,0.22);
+  color: var(--blue);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.accum-callout svg { flex-shrink: 0; }
+.accum-callout span { color: var(--muted-light); }
+.accum-callout b { color: var(--blue); font-weight: 750; }
+.accum-callout.warn-bg { background: rgba(240,85,93,0.10); border-color: rgba(240,85,93,0.22); color: var(--red); }
+.accum-callout.warn-bg b { color: var(--red); }
+
 .institution-hero .inst-head-left, .inst-head-left {
   display: flex;
   align-items: center;
