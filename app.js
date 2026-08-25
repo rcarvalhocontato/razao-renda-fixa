@@ -855,7 +855,7 @@ function PortfolioLine({ series }) {
             React.createElement("span", null, series[Math.floor(series.length / 2)].date),
             React.createElement("span", null, series.at(-1).date)));
 }
-function PerformanceBars({ ativos, ref, today, period }) {
+function PerformanceBars({ ativos, refTaxas, today, period }) {
     const months = [];
     const end = new Date(today + 'T00:00:00');
     for (let i = 5; i >= 0; i--) {
@@ -863,8 +863,8 @@ function PerformanceBars({ ativos, ref, today, period }) {
         const ini = d.toISOString().slice(0, 10);
         const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
         const fim = last > end ? today : last.toISOString().slice(0, 10);
-        const r = periodReturnMD(ativos, ini, fim, ref, today, {});
-        const c = periodoCDIExato(ref, ini, fim);
+        const r = periodReturnMD(ativos, ini, fim, refTaxas, today, {});
+        const c = periodoCDIExato(refTaxas, ini, fim);
         months.push({ label: MESES_ABREV[d.getMonth()], r: r ?? 0, c: c ?? 0 });
     }
     const max = Math.max(0.1, ...months.flatMap(x => [x.r, x.c]));
@@ -1000,7 +1000,7 @@ function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxa
                     React.createElement("div", null,
                         React.createElement("h2", null, "Desempenho"),
                         React.createElement("p", null, "Carteira comparada ao CDI"))),
-                React.createElement(PerformanceBars, { ativos: ativos, ref: refTaxas, today: today, period: period }))),
+                React.createElement(PerformanceBars, { ativos: ativos, refTaxas: refTaxas, today: today, period: period }))),
         React.createElement("div", { className: "two-col" },
             React.createElement(RefCard, null,
                 React.createElement("div", { className: "section-head" },
@@ -1192,7 +1192,7 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today }) {
                     React.createElement("p", null,
                         periodLabel(period),
                         " \u00B7 retorno bruto com fluxos tratados como aportes"))),
-            React.createElement(PerformanceBars, { ativos: ativos, ref: refTaxas, today: today, period: period })),
+            React.createElement(PerformanceBars, { ativos: ativos, refTaxas: refTaxas, today: today, period: period })),
         React.createElement(RefCard, null,
             React.createElement("div", { className: "section-head" },
                 React.createElement("div", null,
