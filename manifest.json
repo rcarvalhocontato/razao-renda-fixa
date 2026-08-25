@@ -1,13 +1,1 @@
-{
-  "name": "Razão — Renda Fixa",
-  "short_name": "Razão",
-  "start_url": "./?v=13",
-  "display": "standalone",
-  "background_color": "#08111C",
-  "theme_color": "#08111C",
-  "description": "Controle e análise de investimentos de renda fixa.",
-  "icons": [
-    {"src":"icon-v12.png?v=13","sizes":"1024x1024","type":"image/png","purpose":"any maskable"},
-    {"src":"icon-v12-180.png?v=13","sizes":"180x180","type":"image/png","purpose":"any"}
-  ]
-}
+{"name":"Razão — Renda Fixa","short_name":"Razão","start_url":"./","display":"standalone","background_color":"#0A0D12","theme_color":"#08111C","icons":[{"src":"icon-v14.png","sizes":"512x512","type":"image/png"},{"src":"icon-v14-180.png","sizes":"180x180","type":"image/png"}]}
