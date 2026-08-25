@@ -1,4 +1,4 @@
-const RAZAO_BUILD = 'v15.1-reference';
+const RAZAO_BUILD = 'v15.2-local-react';
 const ReactDOM = window.ReactDOM;
 const { useState, useEffect, useMemo, useCallback } = React;
 /* ------------------------------------------------------------------ */

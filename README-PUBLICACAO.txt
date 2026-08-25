@@ -1,11 +1,6 @@
-RAZÃO — RENDA FIXA — V15.1 REFERENCE
+RAZÃO — V15.2 LOCAL REACT
 
-Pacote offline: não depende de React/Babel/JS externo.
-
-Publicação GitHub Pages:
-1. Substitua index.html, manifest.json e os dois ícones na raiz do repositório.
-2. Faça commit na branch main.
-3. Aguarde o Pages concluir.
-4. Teste primeiro no Safari.
-
-Build: 2026-08-25-v15.1-reference
+Publicação: envie TODOS os arquivos desta pasta para a raiz da branch main.
+Não dependa de CDN: React 18 e ReactDOM 18 estão embutidos em vendor-react18.js.
+Depois do commit, aguarde o GitHub Pages concluir o deploy.
+Não apague o Pages nem altere o armazenamento local do aplicativo.
