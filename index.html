@@ -11,8 +11,8 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <meta http-equiv="Pragma" content="no-cache" />
 <meta http-equiv="Expires" content="0" />
-<meta name="razao-version" content="2026-08-24-v13" />
-<link rel="apple-touch-icon" href="icon-v12.png" />
+<meta name="razao-version" content="2026-08-24-v14.3.1" />
+<link rel="apple-touch-icon" href="icon-v14.png" />
 <link rel="manifest" href="manifest.json" />
 <style>
   * { box-sizing: border-box; }
@@ -33,14 +33,19 @@
   input[type=date] { color-scheme: dark; } select { color-scheme: dark; }
   input::placeholder, textarea::placeholder { color: #6B7480; opacity: .8; }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.27.1/babel.min.js"></script>
+
 
 <style id="v12-clean-overrides">
   body{background:radial-gradient(1200px 500px at 50% -160px,rgba(29,73,115,.22),transparent 62%),#070B10;}
   button{font-family:inherit;}
   .clean-brand{letter-spacing:.08em;}
+</style>
+<style id="v14-reference-ui">
+:root{--bg:#07111c;--bg2:#091724;--card:#0d1b2a;--card2:#102238;--line:rgba(164,190,220,.14);--text:#f4f7fb;--muted:#7e91a8;--blue:#1b83ff;--green:#19d8a1;--gold:#d8a84b;--red:#ff6370;}
+html,body{background:var(--bg)!important;color:var(--text)!important;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif!important}
+body{padding-bottom:calc(72px + env(safe-area-inset-bottom));}
+.ref-app{min-height:100dvh;background:radial-gradient(800px 300px at 50% -100px,rgba(28,117,190,.18),transparent 65%),var(--bg);padding-bottom:20px}.ref-header{position:sticky;top:0;z-index:20;background:rgba(7,17,28,.92);backdrop-filter:blur(18px);border-bottom:1px solid rgba(255,255,255,.05);padding-top:env(safe-area-inset-top)}.topbar{max-width:1180px;margin:auto;padding:12px 18px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{display:flex;align-items:center;gap:9px}.brand img{width:42px;height:42px;border-radius:12px;object-fit:cover;box-shadow:0 8px 22px rgba(0,0,0,.35)}.brand-name{font-family:Georgia,serif;font-size:20px;letter-spacing:.13em;line-height:1}.brand-sub{font-size:8px;letter-spacing:.24em;color:var(--gold);margin-top:3px}.head-actions{display:flex;gap:8px}.primary-btn,.ghost-btn{border:0;border-radius:13px;padding:10px 15px;font-weight:800;font-size:13px;display:flex;align-items:center;gap:6px}.primary-btn{background:var(--blue);color:white;box-shadow:0 8px 24px rgba(27,131,255,.2)}.ghost-btn{background:#182536;color:#e7edf5;border:1px solid var(--line)}.rates{max-width:1180px;margin:auto;padding:3px 18px 10px;display:flex;align-items:center;gap:9px;overflow-x:auto;white-space:nowrap;color:var(--muted);font-size:12px}.rates b{color:var(--text);font-family:"IBM Plex Mono",monospace;font-size:14px}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);flex:none}.status-dot.live{background:var(--green);box-shadow:0 0 10px rgba(25,216,161,.5)}.refresh{background:none;border:0;color:var(--muted);padding:0;display:flex}.sep{height:16px;width:1px;background:var(--line)}.refdate{font-size:10px}.desktop-tabs{max-width:1180px;margin:auto;padding:0 12px 8px;display:flex;gap:4px;overflow:auto}.desktop-tabs button{background:none;border:0;color:#6f8198;border-radius:12px;padding:9px 13px;font-weight:750;display:flex;align-items:center;gap:7px;white-space:nowrap}.desktop-tabs button.active{background:#122338;color:white;box-shadow:inset 0 0 0 1px rgba(42,132,255,.12)}main{max-width:1180px;margin:auto}.screen{padding:18px 16px 96px;display:flex;flex-direction:column;gap:16px}.ref-card{background:linear-gradient(145deg,rgba(15,30,46,.98),rgba(10,24,38,.98));border:1px solid var(--line);border-radius:20px;box-shadow:0 18px 40px rgba(0,0,0,.18);padding:18px}.hero-card{background:linear-gradient(135deg,#0c2033,#0a1725 65%,#091521);border-color:rgba(216,168,75,.35);padding:20px}.hero-label,.eyebrow{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:800}.hero-row{display:grid;grid-template-columns:1fr 42%;gap:18px;align-items:center}.hero-value{font-family:"IBM Plex Mono",monospace;font-size:clamp(30px,6vw,48px);font-weight:700;letter-spacing:-.03em;margin-top:7px}.hero-gain{color:var(--green);font-size:14px;font-weight:800;margin-top:6px}.hero-gain span{font-size:12px}.hero-note{color:var(--muted);font-size:11px;margin-top:5px}.hero-spark{min-width:0}.hero-spark .chart-box{padding:0;border:0;background:none}.hero-spark .chart-top,.hero-spark .chart-axis{display:none}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card-title,.subhead{font-size:15px;font-weight:850}.period-switch,.chips{display:flex;gap:5px;background:#132132;border-radius:12px;padding:4px;overflow:auto}.period-switch button,.chips button{border:0;background:transparent;color:#8092a8;padding:8px 11px;border-radius:9px;white-space:nowrap;font-size:11px;font-weight:750}.period-switch button.sel,.chips button.on{background:var(--blue);color:#fff}.metric-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.metric-pair span,.mini-grid span,.inv-values span,.analysis-hero span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:750;letter-spacing:.04em}.metric-pair strong{display:block;font-family:"IBM Plex Mono",monospace;font-size:24px;margin-top:5px}.warn{color:var(--red)!important}.green-txt{color:var(--green)!important}.compare-line{height:8px;background:#18283a;border-radius:10px;overflow:hidden;margin-top:18px}.compare-line div{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));border-radius:10px}.compare-foot{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:6px}.mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}.mini-grid b{font-family:"IBM Plex Mono",monospace;font-size:14px;display:block;margin-top:5px}.section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}.section-head h2,.page-head h1{font-size:17px;margin:0;font-weight:850}.section-head p,.page-head p{font-size:11px;color:var(--muted);margin:4px 0 0}.text-btn{background:none;border:0;color:#49a1ff;font-weight:800;font-size:11px}.chart-box{background:#0b1826;border:1px solid rgba(255,255,255,.05);border-radius:14px;padding:10px}.chart-box svg{width:100%;height:220px;display:block}.chart-top,.chart-axis{display:flex;justify-content:space-between;color:var(--muted);font-size:9px}.chart-top b{color:var(--text);font-family:"IBM Plex Mono",monospace}.empty-chart{height:180px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;text-align:center}.bars-chart{padding-top:6px}.bars-grid{height:155px;display:flex;align-items:flex-end;justify-content:space-around;gap:7px;border-bottom:1px solid var(--line)}.bar-group{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}.bar-pair{height:125px;display:flex;align-items:flex-end;gap:3px}.bar{display:block;width:9px;border-radius:4px 4px 0 0}.bar.green{background:var(--green)}.bar.blue{background:var(--blue);opacity:.8}.bar-group small{font-size:9px;color:var(--muted);margin-top:6px}.bar-legend{display:flex;gap:14px;margin-top:10px;color:var(--muted);font-size:10px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px}.donut-wrap{display:grid;grid-template-columns:170px 1fr;align-items:center;gap:18px}.donut{width:165px;height:165px;border-radius:50%;position:relative}.donut-hole{position:absolute;inset:32px;background:#0b1826;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center}.donut-hole strong{font-family:"IBM Plex Mono",monospace;font-size:12px}.donut-hole span{font-size:9px;color:var(--muted);margin-top:3px}.donut-legend{display:flex;flex-direction:column;gap:9px}.legend-row{display:grid;grid-template-columns:9px 1fr auto;gap:7px;align-items:center;font-size:11px}.legend-row i{width:8px;height:8px;border-radius:50%}.legend-row span{color:var(--muted)}.legend-row b{font-family:"IBM Plex Mono",monospace}.insight-list{display:flex;flex-direction:column;gap:8px}.insight{display:grid;grid-template-columns:34px 1fr 12px;gap:9px;align-items:center;background:#0c1b2b;border:1px solid var(--line);border-radius:13px;padding:10px}.insight-icon{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-weight:900;background:#123353;color:#55a8ff}.insight-icon.i1{background:#352d13;color:#ffc447}.insight-icon.i2{background:#17362d;color:#36e0ad}.insight b{font-size:11px;display:block}.insight span{display:block;color:var(--muted);font-size:9.5px;line-height:1.3;margin-top:2px}.chev{color:var(--muted)!important;font-size:18px!important}.rank-table{display:flex;flex-direction:column}.rank-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}.rank-row:last-child{border-bottom:0}.rank-row b{font-size:12px;display:block}.rank-row span{font-size:9.5px;color:var(--muted);display:block;margin-top:3px}.rank-row strong{font-family:"IBM Plex Mono",monospace}.page-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.head-search{display:flex;gap:7px}.head-search input{width:130px;background:#101e2d;border:1px solid var(--line);border-radius:11px;color:var(--text);padding:9px 10px;outline:0}.circle-plus{width:38px;height:38px;border:0;border-radius:50%;background:var(--blue);color:#fff;font-size:25px}.chips.wide{align-self:flex-start}.chips.compact{padding:2px}.chips.compact button{padding:6px 9px}.subhead{margin-top:2px}.institution-list{display:flex;flex-direction:column;gap:8px}.institution-row{width:100%;display:grid;grid-template-columns:1fr auto 15px;gap:10px;align-items:center;text-align:left;background:linear-gradient(145deg,#0e1e30,#0b1827);border:1px solid var(--line);border-radius:15px;color:var(--text);padding:13px 14px}.brandless{display:flex;align-items:center;gap:10px;min-width:0}.brand-dot{width:10px;height:10px;border-radius:50%;background:var(--blue);box-shadow:0 0 12px rgba(27,131,255,.35)}.institution-row b{display:block;font-size:13px}.institution-row small{display:block;color:var(--muted);font-size:9.5px;margin-top:3px}.institution-row strong{display:block;font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right}.institution-row>span{color:var(--muted);font-size:20px}.back-btn{align-self:flex-start;border:0;background:none;color:#55a8ff;font-weight:800;font-size:12px}.institution-hero{display:flex;justify-content:space-between;align-items:flex-end}.institution-hero h1{margin:4px 0;font-size:24px}.institution-hero span{color:var(--muted);font-size:11px}.inst-total{font-family:"IBM Plex Mono",monospace;font-size:18px;text-align:right}.inst-total small{display:block;color:var(--green);font-size:10px;margin-top:4px}.detail-list{display:flex;flex-direction:column;gap:10px}.investment-card{padding:15px}.inv-head{display:flex;justify-content:space-between;gap:10px}.type-pill{display:inline-block;background:#19314b;color:#77baff;border-radius:8px;padding:4px 7px;font-size:9px;font-weight:850}.inv-head h3{font-size:14px;margin:7px 0 3px}.inv-head p{font-size:9.5px;color:var(--muted);margin:0}.inv-actions{display:flex;gap:4px}.inv-actions button{background:#152538;color:#8da1b7;border:1px solid var(--line);border-radius:8px;padding:6px 7px;font-size:9px}.inv-values{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;padding-top:13px;border-top:1px solid var(--line)}.inv-values b{font-family:"IBM Plex Mono",monospace;font-size:12px;display:block;margin-top:4px}.analysis-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.analysis-hero>div{background:#0d1b2a;border:1px solid var(--line);border-radius:14px;padding:13px}.analysis-hero strong{font-family:"IBM Plex Mono",monospace;font-size:20px;display:block;margin-top:6px}.comparison-table{display:flex;flex-direction:column}.ct-head,.ct-row{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}.ct-head{color:var(--muted);font-size:9px;text-transform:uppercase;font-weight:800}.ct-row span{font-size:11px}.ct-row b,.ct-row strong{font-family:"IBM Plex Mono",monospace;font-size:11px}.issuer-table{display:flex;flex-direction:column}.issuer-row{border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);padding:13px 0;display:grid;grid-template-columns:1fr auto;text-align:left}.issuer-row b{display:block;font-size:12px}.issuer-row span,.issuer-row small{display:block;color:var(--muted);font-size:9px;margin-top:3px}.issuer-row strong{display:block;font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:right}.bottom-nav{position:fixed;left:50%;transform:translateX(-50%);bottom:0;z-index:30;width:min(680px,calc(100% - 24px));padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:rgba(8,18,29,.94);backdrop-filter:blur(20px);border:1px solid var(--line);border-radius:20px 20px 0 0;display:grid;grid-template-columns:repeat(4,1fr);box-shadow:0 -10px 30px rgba(0,0,0,.22)}.bottom-nav button{border:0;background:none;color:#637991;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:8px;font-weight:750}.bottom-nav button.active{color:#3d9cff}.loading-screen{min-height:100dvh;display:grid;place-items:center;color:var(--muted);background:var(--bg)}
+@media(max-width:700px){.topbar{padding-left:14px;padding-right:14px}.desktop-tabs{display:none}.rates{padding-left:14px}.screen{padding:12px 12px 96px}.two-col{grid-template-columns:1fr}.hero-row{grid-template-columns:1fr}.hero-spark{display:none}.hero-value{font-size:32px}.donut-wrap{grid-template-columns:145px 1fr}.donut{width:140px;height:140px}.donut-hole{inset:28px}.analysis-hero{grid-template-columns:1fr 1fr}.head-search input{width:110px}.brand-name{font-size:18px}.brand img{width:38px;height:38px}}
 </style>
 </head>
 <body>
@@ -55,9 +60,9 @@
         '<p style="font-size:13px;color:#98A2AF;line-height:1.5;">Isso costuma acontecer quando o navegador bloqueou scripts externos (React/Babel) — por bloqueador de anúncios/scripts, modo offline, ou rede restrita (ex: wi-fi corporativo). Verifique sua conexão, desative bloqueadores para esta página e recarregue.</p>' +
         '</div></div>';
     }
-  }, 7000);
+  }, 25000);
 </script>
-<script type="text/babel" data-presets="react">
+<script type="text/plain" id="app-source">
 const { useState, useEffect, useMemo, useCallback } = React;
 
 /* ------------------------------------------------------------------ */
@@ -676,193 +681,125 @@ function lerBackupArquivo(file) {
 /* ------------------------------------------------------------------ */
 /* App                                                                   */
 /* ------------------------------------------------------------------ */
-function App() {
-  const [loading, setLoading] = useState(true);
-  const [investments, setInvestments] = useState([]);
-  const [refTaxas, setRefTaxas] = useState(defaultRef);
-  const [taxaStatus, setTaxaStatus] = useState('manual');
-  const [historicoIndices, setHistoricoIndices] = useState({ cdi: [], selic: [], status: 'idle' });
-  const [tab, setTab] = useState('painel');
-  const [filtro, setFiltro] = useState('Ativas');
-  const [rankBy, setRankBy] = useState('rentLiquidaMensal');
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(emptyForm);
-  const [formError, setFormError] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
-  const [historicoDraft, setHistoricoDraft] = useState({ data: todayStr(), valor: '' });
-  const [resgateDraft, setResgateDraft] = useState({ data: todayStr(), valor: '' });
-  const [resgatandoId, setResgatandoId] = useState(null);
-  // Mantém a data de cálculo atualizada enquanto o PWA permanece aberto.
-  const [today, setToday] = useState(todayStr());
-  const [historicoTick, setHistoricoTick] = useState(0);
-  const [showDados, setShowDados] = useState(false);
-  const [backupMsg, setBackupMsg] = useState('');
-
-  function exportarBackup() {
-    try { baixarBackup(); setBackupMsg('Backup exportado.'); }
-    catch (e) { setBackupMsg('Não foi possível exportar o backup.'); }
-  }
-  async function importarBackup(file) {
-    try {
-      const payload = await lerBackupArquivo(file);
-      if (!payload || payload.app !== 'Razão — Renda Fixa' || !Array.isArray(payload.investments)) throw new Error('Este arquivo não é um backup válido do Razão.');
-      if (!window.confirm(`Importar ${payload.investments.length} investimento(s)? Isso substituirá os dados atuais desta instalação.`)) return;
-      await storage.set('rf-investimentos', JSON.stringify(payload.investments));
-      if (payload.taxas) await storage.set('rf-taxas-referencia', JSON.stringify(payload.taxas));
-      setInvestments(payload.investments);
-      if (payload.taxas) setRefTaxas(payload.taxas);
-      setBackupMsg(`Importados ${payload.investments.length} investimento(s).`);
-      setShowDados(true);
-    } catch (e) { setBackupMsg(e.message || 'Falha ao importar backup.'); setShowDados(true); }
-  }
-
-  const refreshTaxas = useCallback(() => {
-    setTaxaStatus('carregando');
-    fetchTaxasBCB().then(data => {
-      const novo = {
-        cdi: data.cdi.valor,
-        selic: data.selic.valor,
-        ipca: data.ipca.valor,
-        dataCDI: data.cdi.data,
-        dataSelic: data.selic.data,
-        dataIPCA: data.ipca.data,
-        atualizado: today,
-        fonte: 'bcb'
-      };
-      setRefTaxas(novo); setTaxaStatus('conectado'); storage.set('rf-taxas-referencia', JSON.stringify(novo));
-    }).catch(() => setTaxaStatus('offline'));
-  }, [today]);
-
-  useEffect(() => {
-    (async () => {
-      const r = await storage.get('rf-investimentos'); if (r) { try { setInvestments(JSON.parse(r.value)); } catch (e) {} }
-      const r2 = await storage.get('rf-taxas-referencia'); if (r2) { try { setRefTaxas(JSON.parse(r2.value)); } catch (e) {} }
-      setLoading(false); refreshTaxas();
-    })();
-
-    // O BCB publica a taxa diária depois do pregão. Uma checagem horária
-    // permite incorporar o novo pregão assim que ele estiver disponível.
-    const intervalTaxas = setInterval(refreshTaxas, 60 * 60 * 1000);
-    const intervalHistorico = setInterval(() => {
-      const novaData = todayStr();
-      setToday(anterior => anterior === novaData ? anterior : novaData);
-      setHistoricoTick(t => t + 1);
-    }, 60 * 60 * 1000);
-
-    // Ao retornar do segundo plano/tela bloqueada, força nova leitura.
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const novaData = todayStr();
-        setToday(anterior => anterior === novaData ? anterior : novaData);
-        setHistoricoTick(t => t + 1);
-        refreshTaxas();
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      clearInterval(intervalTaxas);
-      clearInterval(intervalHistorico);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-    // eslint-disable-next-line
-  }, []);
-
-  const minDataCDI = useMemo(() => { const d = investments.filter(i => i.indexador === 'CDI').map(i => i.dataAplicacao).sort(); return d.length ? d[0] : null; }, [investments]);
-  const minDataSelic = useMemo(() => { const d = investments.filter(i => i.indexador === 'SELIC').map(i => i.dataAplicacao).sort(); return d.length ? d[0] : null; }, [investments]);
-
-  useEffect(() => {
-    if (!minDataCDI && !minDataSelic) return;
-    let cancelado = false;
-    (async () => {
-      setHistoricoIndices(h => ({ ...h, status: 'carregando' }));
-      try {
-        const [cdi, selic] = await Promise.all([
-          minDataCDI ? fetchHistoricoDiario(12, minDataCDI, today) : Promise.resolve([]),
-          minDataSelic ? fetchHistoricoDiario(11, minDataSelic, today) : Promise.resolve([]),
-        ]);
-        if (!cancelado) setHistoricoIndices({ cdi, selic, status: 'ok' });
-      } catch (e) { if (!cancelado) setHistoricoIndices(h => ({ ...h, status: 'erro' })); }
-    })();
-    return () => { cancelado = true; };
-  }, [minDataCDI, minDataSelic, today, historicoTick]);
-
-  const refreshTudo = useCallback(() => {
-    refreshTaxas();
-    setHistoricoTick(t => t + 1);
-    setToday(todayStr());
-  }, [refreshTaxas]);
-
-  const refComHistorico = useMemo(() => ({ ...refTaxas, historicoCDI: historicoIndices.cdi, historicoSelic: historicoIndices.selic }), [refTaxas, historicoIndices]);
-
-  async function persist(list) { setInvestments(list); await storage.set('rf-investimentos', JSON.stringify(list)); }
-  async function persistRefManual(r) { setRefTaxas(r); setTaxaStatus('manual'); await storage.set('rf-taxas-referencia', JSON.stringify(r)); }
-
-  function openNew() { setForm(emptyForm); setEditingId(null); setFormError(''); setShowForm(true); }
-  function openEdit(inv) { setForm({ ...emptyForm, ...inv, valorAplicado: String(inv.valorAplicado), parametroValor: inv.parametroValor ?? '', aliquotaIRManual: inv.aliquotaIRManual ?? '', taxaOverrideAnual: inv.taxaOverrideAnual ?? '', carteira: inv.carteira || '', vincularA: inv.groupId || '', tituloTesouro: inv.tituloTesouro || '', quantidade: inv.quantidade ?? '', precoUnitarioCompra: inv.precoUnitarioCompra ?? '', precoUnitarioAtual: inv.precoUnitarioAtual ?? '', valorAtualBrutoManual: inv.valorAtualBrutoManual ?? '', taxaCustodiaB3: inv.taxaCustodiaB3 ?? '0.20', tesouroCupom: inv.tesouroCupom || 'Não' }); setEditingId(inv.id); setFormError(''); setShowForm(true); }
-  function handleTipoChange(tipo) { setForm(f => ({ ...f, tipo, isentoIR: TIPO_META[tipo].isentoDefault })); }
-
-  function handleSave() {
-    if (!form.instituicao.trim()) return setFormError('Informe a instituição / emissor.');
-    if (!form.dataAplicacao) return setFormError('Informe a data de aplicação.');
-    if (!form.dataVencimento) return setFormError('Informe a data de vencimento.');
-    if (form.dataVencimento <= form.dataAplicacao) return setFormError('O vencimento deve ser após a data de aplicação.');
-    const valor = Number(form.valorAplicado);
-    if (!valor || valor <= 0) return setFormError('Informe um valor aplicado válido.');
-    const grupoSelecionado = form.vincularA ? investments.find(inv => inv.id === form.vincularA || (inv.groupId || inv.id) === form.vincularA) : null;
-    const groupId = grupoSelecionado ? (grupoSelecionado.groupId || grupoSelecionado.id) : (editingId ? ((investments.find(inv => inv.id === editingId)?.groupId) || editingId) : uid());
-    if (form.tipo === 'Tesouro Direto') {
-      if (!form.tituloTesouro.trim()) return setFormError('Informe o título do Tesouro Direto.');
-      if (!Number(form.quantidade) || Number(form.quantidade) <= 0) return setFormError('Informe a quantidade de títulos.');
-      if (!Number(form.precoUnitarioCompra) || Number(form.precoUnitarioCompra) <= 0) return setFormError('Informe o preço unitário de compra.');
-      if (!Number(form.valorAtualBrutoManual) && !Number(form.precoUnitarioAtual)) return setFormError('Informe o valor bruto atual do Tesouro ou o preço unitário atual.');
-    }
-    const campos = { instituicao: form.instituicao.trim(), tipo: form.tipo, indexador: form.indexador, parametroValor: form.parametroValor === '' ? 0 : Number(form.parametroValor), dataAplicacao: form.dataAplicacao, dataVencimento: form.dataVencimento, valorAplicado: valor, liquidez: form.liquidez, isentoIR: !!form.isentoIR, aliquotaIRManual: form.aliquotaIRManual === '' ? '' : Number(form.aliquotaIRManual), taxaOverrideAnual: form.taxaOverrideAnual === '' ? '' : Number(form.taxaOverrideAnual), carteira: form.carteira.trim(), observacoes: form.observacoes, groupId,
-      tituloTesouro: form.tituloTesouro?.trim() || '', quantidade: form.quantidade === '' ? '' : Number(form.quantidade), precoUnitarioCompra: form.precoUnitarioCompra === '' ? '' : Number(form.precoUnitarioCompra), precoUnitarioAtual: form.precoUnitarioAtual === '' ? '' : Number(form.precoUnitarioAtual), valorAtualBrutoManual: form.valorAtualBrutoManual === '' ? '' : Number(form.valorAtualBrutoManual), taxaCustodiaB3: form.taxaCustodiaB3 === '' ? 0.20 : Number(form.taxaCustodiaB3), tesouroCupom: form.tesouroCupom || 'Não' };
-    if (editingId) {
-      persist(investments.map(inv => inv.id === editingId ? { ...inv, ...campos, historico: (inv.historico && inv.historico.length) ? inv.historico.map(h => (h.data === inv.dataAplicacao && h.valorBruto === inv.valorAplicado) ? { ...h, data: campos.dataAplicacao, valorBruto: valor } : h) : [{ id: uid(), data: campos.dataAplicacao, valorBruto: valor }] } : inv));
+function periodReturnMD(ativos, inicio, fim, ref, today, metricsById) {
+  if (!inicio || !fim || inicio >= fim) return null;
+  const totalDays=Math.max(diffDays(inicio,fim),1);
+  let V0=0, V1=0, CF=0, weightedCF=0;
+  ativos.forEach(inv=>{
+    if(inv.dataAplicacao>fim) return;
+    const end=Math.min(0,0);
+    const vf=valorProjetadoEm(inv,fim,ref,today);
+    if(!(vf>0)) return;
+    V1+=vf;
+    if(inv.dataAplicacao<inicio){
+      const vi=valorProjetadoEm(inv,inicio,ref,today);
+      if(vi>0)V0+=vi;
     } else {
-      persist([...investments, { id: uid(), ...campos, status: 'ativo', historico: [{ id: uid(), data: campos.dataAplicacao, valorBruto: valor }] }]);
+      const cf=Number(inv.valorAplicado)||0;
+      CF+=cf;
+      const w=Math.max(0,Math.min(1,diffDays(inv.dataAplicacao,fim)/totalDays));
+      weightedCF+=cf*w;
     }
-    setShowForm(false);
-  }
-  function deleteInvestment(id) { if (!window.confirm('Remover esta aplicação definitivamente? Essa ação não pode ser desfeita.')) return; persist(investments.filter(inv => inv.id !== id)); }
-  function addHistorico(invId) { const valor = Number(historicoDraft.valor); if (!valor || valor <= 0 || !historicoDraft.data) return; persist(investments.map(inv => inv.id !== invId ? inv : { ...inv, historico: [...(inv.historico || []).filter(h => h.data !== historicoDraft.data), { id: uid(), data: historicoDraft.data, valorBruto: valor }] })); setHistoricoDraft({ data: todayStr(), valor: '' }); }
-  function confirmResgate(invId) { const valor = Number(resgateDraft.valor); if (!valor || !resgateDraft.data) return; persist(investments.map(inv => inv.id === invId ? { ...inv, status: 'resgatado', dataResgate: resgateDraft.data, valorLiquidoRecebido: valor } : inv)); setResgatandoId(null); setResgateDraft({ data: todayStr(), valor: '' }); }
-  function reabrir(invId) { persist(investments.map(inv => inv.id === invId ? { ...inv, status: 'ativo', dataResgate: undefined, valorLiquidoRecebido: undefined } : inv)); }
-
-  const ativos = useMemo(() => investments.filter(i => i.status === 'ativo'), [investments]);
-  const resgatados = useMemo(() => investments.filter(i => i.status === 'resgatado'), [investments]);
-  const metricsById = useMemo(() => { const map = {}; investments.forEach(inv => { map[inv.id] = calcMetrics(inv, today, refComHistorico); }); return map; }, [investments, today, refComHistorico]);
-  const totais = useMemo(() => ativos.reduce((acc, inv) => { const m = metricsById[inv.id]; acc.aplicado += inv.valorAplicado; acc.bruto += m.valorAtualBruto; acc.liquido += m.valorAtualLiquido; acc.estimadoVenc += m.valorEstLiquidoVenc; return acc; }, { aplicado: 0, bruto: 0, liquido: 0, estimadoVenc: 0 }), [ativos, metricsById]);
-  const ganhoLiquido = totais.liquido - totais.aplicado;
-  const rentLiquida = totais.aplicado > 0 ? (ganhoLiquido / totais.aplicado) * 100 : 0;
-  const porTipo = useMemo(() => { const map = {}; ativos.forEach(inv => { map[inv.tipo] = (map[inv.tipo] || 0) + metricsById[inv.id].valorAtualBruto; }); return Object.entries(map).map(([tipo, valor]) => ({ name: tipo, value: valor, cor: TIPO_META[tipo]?.cor || C.muted })); }, [ativos, metricsById]);
-  const porIndexador = useMemo(() => { const map = {}; ativos.forEach(inv => { map[inv.indexador] = (map[inv.indexador] || 0) + metricsById[inv.id].valorAtualBruto; }); return Object.entries(map).map(([nome, valor]) => ({ name: nome, value: valor, cor: INDEXADOR_COR[nome] || C.muted })); }, [ativos, metricsById]);
-  const porInstituicao = useMemo(() => { const map = {}; ativos.forEach(inv => { map[inv.instituicao] = (map[inv.instituicao] || 0) + metricsById[inv.id].valorAtualBruto; }); return Object.entries(map).map(([nome, valor]) => ({ name: nome, valor })).sort((a, b) => b.valor - a.valor).slice(0, 8); }, [ativos, metricsById]);
-  const calendarioVencimentos = useMemo(() => { const meses = []; const base = new Date(); for (let i = 0; i < 12; i++) { const d = new Date(base.getFullYear(), base.getMonth() + i, 1); meses.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }), valor: 0 }); } ativos.forEach(inv => { const key = inv.dataVencimento.slice(0, 7); const alvo = meses.find(m => m.key === key); if (alvo) alvo.valor += metricsById[inv.id].valorAtualBruto; }); return meses; }, [ativos, metricsById]);
-  const evolucao = useMemo(() => buildEvolutionSeries(ativos, metricsById, today), [ativos, metricsById, today]);
-  const proximosVencimentos = useMemo(() => ativos.slice().sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)).slice(0, 6), [ativos]);
-  const listaFiltrada = useMemo(() => { let base = investments; if (filtro === 'Ativas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes >= 0); if (filtro === 'Vencidas') base = investments.filter(i => i.status === 'ativo' && metricsById[i.id].diasRestantes < 0); if (filtro === 'Resgatadas') base = investments.filter(i => i.status === 'resgatado'); return base.slice().sort((a, b) => { const ga = grupoIdDe(a), gb = grupoIdDe(b); return ga.localeCompare(gb) || a.dataVencimento.localeCompare(b.dataVencimento) || a.dataAplicacao.localeCompare(b.dataAplicacao); }); }, [investments, filtro, metricsById]);
-  const ranking = useMemo(() => { const list = ativos.slice(); const cmp = { rentLiquidaMensal: (a, b) => (metricsById[b.id].rentLiquidaMensal ?? -999) - (metricsById[a.id].rentLiquidaMensal ?? -999), rentLiquidaTotal: (a, b) => metricsById[b.id].rentLiquidaTotal - metricsById[a.id].rentLiquidaTotal, vencimento: (a, b) => a.dataVencimento.localeCompare(b.dataVencimento), valorAplicado: (a, b) => b.valorAplicado - a.valorAplicado }; return list.sort(cmp[rankBy]); }, [ativos, metricsById, rankBy]);
-
-  return <div style={{background:C.bg,color:C.text,minHeight:'100vh',fontFamily:"'Inter', sans-serif"}}>
-    <header style={{background:C.bg,position:'sticky',top:0,zIndex:10,paddingTop:'env(safe-area-inset-top)'}}>
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'10px 14px 5px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
-        <div style={{display:'flex',alignItems:'center',gap:9}}><img src="icon-v12.png" alt="Razão" style={{width:36,height:36,borderRadius:10,objectFit:'cover',boxShadow:'0 4px 16px rgba(215,168,74,.15)'}}/><div><div style={{fontWeight:850,fontSize:14,letterSpacing:.2}}>Razão</div><div style={{color:'#B58A45',fontSize:9.5,letterSpacing:.7,textTransform:'uppercase'}}>Renda Fixa</div></div></div>
-        <button onClick={openNew} style={{background:'#D7A84A',color:'#11151B',border:'none',borderRadius:10,padding:'8px 11px',fontWeight:800,fontSize:11.5,cursor:'pointer'}}><Icon name="plus" size={13}/> Nova</button><button onClick={()=>{setBackupMsg('');setShowDados(true)}} style={{background:C.panel2,color:C.text,border:`1px solid ${C.hairline}`,borderRadius:9,padding:'8px 10px',fontWeight:750,fontSize:11.5,cursor:'pointer'}}><Icon name="download" size={13}/> Dados</button>
-      </div>
-      <TaxasBar refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTudo} onSaveManual={persistRefManual} historicoStatus={historicoIndices.status} historicoCDICount={historicoIndices.cdi.length} historicoSelicCount={historicoIndices.selic.length}/>
-      <div style={{maxWidth:1100,margin:'0 auto',display:'flex',gap:3,padding:'0 10px 8px',overflowX:'auto'}}>{[['painel','Resumo','grid'],['ranking','Análises','listOrdered'],['lista','Instituições','listChecks']].map(([t,l,ic])=><button key={t} onClick={()=>setTab(t)} style={{flex:'0 0 auto',background:tab===t?C.panel:'transparent',border:'none',borderRadius:8,padding:'7px 11px',color:tab===t?C.lime:C.muted,fontWeight:750,fontSize:11.5,cursor:'pointer',display:'flex',gap:5,alignItems:'center'}}><Icon name={ic} size={13}/>{l}</button>)}</div>
-    </header>
-    <main style={{maxWidth:1100,margin:'0 auto',padding:'10px 12px 28px'}}>
-      {loading?<div style={{color:C.muted,padding:40,textAlign:'center'}}>Carregando…</div>:investments.length===0?<div style={{background:C.panel,borderRadius:14,padding:42,textAlign:'center'}}><Icon name="wallet" size={25} color={C.lime}/><p style={{fontWeight:800}}>Nenhuma aplicação</p><p style={{color:C.muted,fontSize:12}}>Cadastre sua primeira posição.</p><button onClick={openNew} style={{background:C.lime,color:'#10160A',border:'none',borderRadius:9,padding:'9px 14px',fontWeight:800}}>Adicionar</button></div>:
-      <>{tab==='painel'&&<Dashboard ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={refComHistorico} today={today} investments={investments}/>} {tab==='ranking'&&<RankingTab investments={investments} ativos={ativos} metricsById={metricsById} refTaxas={refComHistorico}/>} {tab==='lista'&&<ListaAplicacoes investments={investments} filtro={filtro} setFiltro={setFiltro} metricsById={metricsById} refTaxas={refComHistorico} expandedId={expandedId} setExpandedId={setExpandedId} openEdit={openEdit} deleteInvestment={deleteInvestment} historicoDraft={historicoDraft} setHistoricoDraft={setHistoricoDraft} addHistorico={addHistorico} resgatandoId={resgatandoId} setResgatandoId={setResgatandoId} resgateDraft={resgateDraft} setResgateDraft={setResgateDraft} confirmResgate={confirmResgate} reabrir={reabrir}/>}</>}
-    </main>
-    {showDados&&<DadosModal onClose={()=>setShowDados(false)} onExport={exportarBackup} onImport={importarBackup} message={backupMsg}/>}
-    {showForm&&<FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={refComHistorico} investments={investments} onClose={()=>setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange}/>} 
-  </div>;
+  });
+  const den=V0+weightedCF;
+  return den>0 ? ((V1-V0-CF)/den)*100 : null;
+}
+function periodLabel(period){ return period==='mes'?'Mês':period==='ano'?'Ano':'Todo o período'; }
+function periodStart(period,today,ativos){
+  if(period==='mes') return today.slice(0,8)+'01';
+  if(period==='ano') return today.slice(0,4)+'-01-01';
+  return ativos.map(i=>i.dataAplicacao).filter(Boolean).sort()[0]||today;
+}
+function refLogo(nome){
+  const n=normalizarInstituicao(nome);
+  if(n.includes('BTG')) return 'BTG';
+  if(n.includes('BANCO DO BRASIL')) return 'BB';
+  if(n.includes('NUBANK')) return 'NU';
+  if(n.includes('INTER')) return 'inter';
+  if(n.includes('ITAU')) return 'itaú';
+  if(n.includes('PICPAY')) return 'picpay';
+  if(n.includes('XP')) return 'XP';
+  return '';
+}
+function Donut({items,total,centerLabel}){
+  const vals=items.filter(x=>x.value>0); if(!vals.length)return <div className="empty-chart">Sem dados suficientes.</div>;
+  let acc=0; const stops=vals.map(x=>{const a=acc;acc+=x.value;return `${x.color} ${(a/total)*100}% ${(acc/total)*100}%`;}).join(',');
+  return <div className="donut-wrap"><div className="donut" style={{background:`conic-gradient(${stops})`}}><div className="donut-hole"><strong>{centerLabel}</strong><span>Total líquido</span></div></div><div className="donut-legend">{vals.slice(0,6).map((x,i)=><div className="legend-row" key={i}><i style={{background:x.color}}/><span>{x.name}</span><b>{fmtPct(x.value/total*100)}</b></div>)}</div></div>
+}
+function PortfolioLine({series}){
+  if(!series || series.length<2)return <div className="empty-chart">Cadastre posições em datas diferentes para visualizar a evolução.</div>;
+  const vals=series.map(x=>x.total), min=Math.min(...vals), max=Math.max(...vals), range=max-min||1, W=700,H=220,p=12;
+  const pts=vals.map((v,i)=>[p+i/(vals.length-1)*(W-p*2),H-p-(v-min)/range*(H-p*2)]);
+  const path=pts.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ');
+  const area=path+` L${W-p},${H-p} L${p},${H-p} Z`;
+  return <div className="chart-box"><div className="chart-top"><span>{fmtBRL(max)}</span><b>{fmtBRL(vals[vals.length-1])}</b></div><svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"><defs><linearGradient id="rfArea" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#19D8A1" stopOpacity=".35"/><stop offset="1" stopColor="#19D8A1" stopOpacity="0"/></linearGradient></defs><path d={area} fill="url(#rfArea)"/><path d={path} fill="none" stroke="#19D8A1" strokeWidth="3" vectorEffect="non-scaling-stroke"/><circle cx={pts.at(-1)[0]} cy={pts.at(-1)[1]} r="4" fill="#19D8A1"/></svg><div className="chart-axis"><span>{series[0].date}</span><span>{series[Math.floor(series.length/2)].date}</span><span>{series.at(-1).date}</span></div></div>
+}
+function PerformanceBars({ativos,ref,today,period}){
+  const months=[]; const end=new Date(today+'T00:00:00');
+  for(let i=5;i>=0;i--){const d=new Date(end.getFullYear(),end.getMonth()-i,1); const ini=d.toISOString().slice(0,10); const last=new Date(d.getFullYear(),d.getMonth()+1,0); const fim=last>end?today:last.toISOString().slice(0,10); const r=periodReturnMD(ativos,ini,fim,ref,today,{}); const c=periodoCDIExato(ref,ini,fim); months.push({label:MESES_ABREV[d.getMonth()],r:r??0,c:c??0});}
+  const max=Math.max(0.1,...months.flatMap(x=>[x.r,x.c]));
+  return <div className="bars-chart"><div className="bars-grid">{months.map((m,i)=><div className="bar-group" key={i}><div className="bar-pair"><span className="bar green" style={{height:`${Math.max(3,(m.r/max)*118)}px`}} title={`Carteira ${fmtPct(m.r)}`}/><span className="bar blue" style={{height:`${Math.max(3,(m.c/max)*118)}px`}} title={`CDI ${fmtPct(m.c)}`}/></div><small>{m.label}</small></div>)}</div><div className="bar-legend"><span><i className="dot green"/> Sua carteira</span><span><i className="dot blue"/> CDI</span></div></div>
+}
+function ReferenceHeader({refTaxas,status,onRefresh,onNew,onDados,tab,setTab}){
+ return <>
+  <header className="ref-header"><div className="topbar"><div className="brand"><img src="icon-v14.png"/><div><div className="brand-name">RAZÃO</div><div className="brand-sub">RENDA FIXA</div></div></div><div className="head-actions"><button className="primary-btn" onClick={onNew}><Icon name="plus" size={17}/> Nova</button><button className="ghost-btn" onClick={onDados}>Dados</button></div></div>
+  <div className="rates"><span className={`status-dot ${status==='conectado'?'live':''}`}/><span>BCB</span><button className="refresh" onClick={onRefresh}><Icon name="refresh" size={14}/></button><span className="sep"/><span>CDI <b>{fmtPct(refTaxas.cdi)}</b></span><span>Selic <b>{fmtPct(refTaxas.selic)}</b></span><span>IPCA 12m <b>{fmtPct(refTaxas.ipca)}</b></span><span className="refdate">ref. {fmtData(refTaxas.dataCDI)}</span></div>
+  <nav className="desktop-tabs">{[['painel','Painel','grid'],['aplicacoes','Aplicações','wallet'],['analise','Análise','listOrdered'],['instituicoes','Instituições','listChecks']].map(([k,l,ic])=><button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}><Icon name={ic} size={15}/>{l}</button>)}</nav>
+ </header>
+ </>
+}
+function RefCard({children,className=''}){return <section className={'ref-card '+className}>{children}</section>}
+function ReferenceDashboard({ativos,totais,ganhoLiquido,metricsById,refTaxas,today,evolucao,setTab,period,setPeriod}){
+ const start=periodStart(period,today,ativos), ret=periodReturnMD(ativos,start,today,refTaxas,today,metricsById), cdi=periodoCDIExato(refTaxas,start,today), diff=ret!=null&&cdi!=null?ret-cdi:null, pct=ret!=null&&cdi>0?ret/cdi*100:null;
+ const grupos=grupoInstituicoes(ativos,metricsById); const total=totais.liquido||1;
+ const donutItems=grupos.map((g,i)=>({name:nomeInstituicao(g.nome),value:g.liquido,color:['#157EFF','#20C997','#F6B73C','#8B5CF6','#FF5D73','#16B7D8'][i%6]}));
+ const proximos=ativos.slice().sort((a,b)=>a.dataVencimento.localeCompare(b.dataVencimento)).slice(0,3);
+ const alerts=[]; if(grupos[0]&&grupos[0].liquido/total>.4)alerts.push({title:'Concentração',text:`${fmtPct(grupos[0].liquido/total*100)} da carteira está em ${nomeInstituicao(grupos[0].nome)}.`}); const venc30=ativos.filter(i=>metricsById[i.id].diasRestantes>=0&&metricsById[i.id].diasRestantes<=30).reduce((s,i)=>s+metricsById[i.id].valorAtualLiquido,0); if(venc30)alerts.push({title:'Vencimentos',text:`${fmtBRL(venc30)} vencem nos próximos 30 dias.`}); const low=ativos.slice().sort((a,b)=>(metricsById[a.id].rentLiquidaMensal??99)-(metricsById[b.id].rentLiquidaMensal??99))[0]; if(low)alerts.push({title:'Revisar',text:`${low.tipo} em ${nomeInstituicao(low.instituicao)} está em ${fmtPct(metricsById[low.id].rentLiquidaMensal)} líquido/mês.`});
+ const best=ativos.slice().sort((a,b)=>(metricsById[b.id].rentLiquidaMensal??-99)-(metricsById[a.id].rentLiquidaMensal??-99)).slice(0,4);
+ return <div className="screen">
+  <RefCard className="hero-card"><div className="hero-label">Patrimônio líquido</div><div className="hero-row"><div><div className="hero-value">{fmtBRL(totais.liquido)}</div><div className="hero-gain">+{fmtBRL(Math.max(ganhoLiquido,0)).replace('R$ ','R$ ')} <span>▲ {fmtPct(totais.aplicado>0?ganhoLiquido/totais.aplicado*100:0)}</span></div><div className="hero-note">{ativos.length} investimentos · {grupos.length} instituições</div></div><div className="hero-spark"><PortfolioLine series={evolucao}/></div></div></RefCard>
+  <div className="two-col stats-row"><RefCard><div className="card-title">Rentabilidade</div><div className="period-switch">{[['mes','Mês'],['ano','Ano'],['todo','Desde o início']].map(x=><button key={x[0]} className={period===x[0]?'sel':''} onClick={()=>setPeriod(x[0])}>{x[1]}</button>)}</div><div className="metric-pair"><div><span>Sua carteira</span><strong className={ret!=null&&cdi!=null&&ret<cdi?'warn':''}>{ret==null?'—':fmtPct(ret)}</strong></div><div><span>CDI</span><strong>{cdi==null?'—':fmtPct(cdi)}</strong></div></div><div className="compare-line"><div style={{width:`${Math.min(100,Math.max(0,pct||0))}%`}}/></div><div className="compare-foot"><span>{pct==null?'—':fmtPct(pct)+' do CDI'}</span><span className={diff!=null&&diff<0?'warn':''}>{diff==null?'—':(diff>=0?'+':'')+fmtPct(diff)}</span></div></RefCard>
+   <RefCard><div className="card-title">Carteira</div><div className="mini-grid"><div><span>Patrimônio bruto</span><b>{fmtBRL(totais.bruto)}</b></div><div><span>Ganho líquido</span><b className="green-txt">{fmtBRL(ganhoLiquido)}</b></div><div><span>Aplicado</span><b>{fmtBRL(totais.aplicado)}</b></div><div><span>Próximos vencimentos</span><b>{fmtBRL(proximos.reduce((s,i)=>s+metricsById[i.id].valorAtualLiquido,0))}</b></div></div></RefCard></div>
+  <div className="two-col"><RefCard><div className="section-head"><div><h2>Evolução patrimonial</h2><p>Patrimônio líquido ao longo do período</p></div></div><PortfolioLine series={evolucao}/></RefCard><RefCard><div className="section-head"><div><h2>Desempenho</h2><p>Carteira comparada ao CDI</p></div></div><PerformanceBars ativos={ativos} ref={refTaxas} today={today} period={period}/></RefCard></div>
+  <div className="two-col"><RefCard><div className="section-head"><div><h2>Composição</h2><p>Por instituição</p></div><button className="text-btn" onClick={()=>setTab('instituicoes')}>Ver tudo</button></div><Donut items={donutItems} total={total} centerLabel={fmtBRL(total)} /></RefCard><RefCard><div className="section-head"><div><h2>Insights</h2><p>Foco no que merece atenção</p></div></div><div className="insight-list">{alerts.slice(0,3).map((a,i)=><div className="insight" key={i}><div className={'insight-icon i'+i}>{i===0?'◔':i===1?'◫':'↗'}</div><div><b>{a.title}</b><span>{a.text}</span></div><span className="chev">›</span></div>)}</div></RefCard></div>
+  <RefCard><div className="section-head"><div><h2>Melhores investimentos</h2><p>Rentabilidade líquida equivalente por mês</p></div><button className="text-btn" onClick={()=>setTab('analise')}>Ver análise</button></div><div className="rank-table">{best.map(inv=><div className="rank-row" key={inv.id}><div><b>{inv.tipo}</b><span>{nomeInstituicao(inv.instituicao)} · {descricaoTaxa(inv,refTaxas)}</span></div><strong className="green-txt">{fmtPct(metricsById[inv.id].rentLiquidaMensal)}</strong></div>)}</div></RefCard>
+ </div>
+}
+function ReferenceApplications({ativos,metricsById,setTab,onNew,openEdit,deleteInvestment}){
+ const [filter,setFilter]=useState('Todos'), [q,setQ]=useState('');
+ const grupos=grupoInstituicoes(ativos,metricsById).filter(g=>{const ok=filter==='Todos'||(filter==='CDB'&&g.items.some(i=>i.tipo==='CDB'))||(filter==='LCI/LCA'&&g.items.some(i=>['LCI','LCA'].includes(i.tipo)))||(filter==='Tesouro'&&g.items.some(i=>i.tipo==='Tesouro Direto')); const text=nomeInstituicao(g.nome).toLowerCase().includes(q.toLowerCase()); return ok&&text;});
+ const [selected,setSelected]=useState(null); const g=selected?grupos.find(x=>x.key===selected):null;
+ if(g)return <div className="screen"><button className="back-btn" onClick={()=>setSelected(null)}>‹ Aplicações</button><RefCard className="institution-hero"><div><div className="eyebrow">Instituição</div><h1>{nomeInstituicao(g.nome)}</h1><span>{g.items.length} investimentos</span></div><div className="inst-total">{fmtBRL(g.liquido)}<small>{g.aplicado>0?fmtPct((g.liquido/g.aplicado-1)*100):'—'} acumulado</small></div></RefCard><div className="detail-list">{g.items.map(inv=>{const m=metricsById[inv.id];return <RefCard key={inv.id} className="investment-card"><div className="inv-head"><div><span className="type-pill">{inv.tipo}</span><h3>{inv.tituloTesouro||descricaoTaxa(inv,{cdi:14.9,selic:14,ipca:4.6})}</h3><p>{fmtData(inv.dataAplicacao)} → {fmtData(inv.dataVencimento)}</p></div><div className="inv-actions"><button onClick={()=>openEdit(inv)}>Editar</button><button onClick={()=>deleteInvestment(inv.id)}>Excluir</button></div></div><div className="inv-values"><div><span>Valor líquido atual</span><b>{fmtBRL(m.valorAtualLiquido)}</b></div><div><span>Rendimento líquido/mês</span><b className="green-txt">{fmtPct(m.rentLiquidaMensal)}</b></div><div><span>Ganho líquido</span><b>{fmtBRL(m.valorAtualLiquido-inv.valorAplicado)}</b></div><div><span>Vencimento</span><b>{m.diasRestantes>=0?`${m.diasRestantes} dias`:'vencido'}</b></div></div></RefCard>})}</div></div>;
+ return <div className="screen"><div className="page-head"><div><h1>Aplicações</h1><p>Organizadas por instituição</p></div><div className="head-search"><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Pesquisar"/><button className="circle-plus" onClick={onNew}>+</button></div></div><div className="chips">{['Todos','CDB','LCI/LCA','Tesouro'].map(x=><button key={x} className={filter===x?'on':''} onClick={()=>setFilter(x)}>{x}</button>)}</div><div className="subhead">Por instituição</div><div className="institution-list">{grupos.map(g=><button className="institution-row" key={g.key} onClick={()=>setSelected(g.key)}><div className="brandless"><span className="brand-dot"/ ><div><b>{nomeInstituicao(g.nome)}</b><small>{g.items.length} investimentos · {fmtPct(g.liquido/ (ativos.reduce((s,i)=>s+metricsById[i.id].valorAtualLiquido,0)||1)*100)} da carteira</small></div></div><div><strong>{fmtBRL(g.liquido)}</strong><small>{g.aplicado>0?fmtPct((g.liquido/g.aplicado-1)*100):'—'} acumulado</small></div><span>›</span></button>)}</div></div>
+}
+function ReferenceAnalysis({ativos,metricsById,refTaxas,today}){
+ const [period,setPeriod]=useState('mes'), [group,setGroup]=useState('tipo'); const start=periodStart(period,today,ativos); const ret=periodReturnMD(ativos,start,today,refTaxas,today,metricsById), cdi=periodoCDIExato(refTaxas,start,today), diff=ret!=null&&cdi!=null?ret-cdi:null, pct=ret!=null&&cdi>0?ret/cdi*100:null;
+ const groups={}; ativos.forEach(inv=>{const key=group==='tipo'?inv.tipo:normalizarInstituicao(inv.instituicao); if(!groups[key])groups[key]=[];groups[key].push(inv)}); const rows=Object.entries(groups).map(([k,items])=>{const a=items.reduce((s,i)=>s+i.valorAplicado,0), l=items.reduce((s,i)=>s+metricsById[i.id].valorAtualLiquido,0), r=a?((l/a)-1)*100:0, rm=items.reduce((s,i)=>s+(metricsById[i.id].rentLiquidaMensal||0)*metricsById[i.id].valorAtualLiquido,0)/(l||1);return {k,a,l,r,rm}}).sort((a,b)=>b.l-a.l);
+ return <div className="screen"><div className="page-head"><div><h1>Análise</h1><p>Desempenho da carteira, sem visão diária</p></div></div><div className="chips wide">{[['mes','Mês'],['ano','Ano'],['todo','Desde o início']].map(x=><button key={x[0]} className={period===x[0]?'on':''} onClick={()=>setPeriod(x[0])}>{x[1]}</button>)}</div><div className="analysis-hero"><div><span>Sua carteira</span><strong>{ret==null?'—':fmtPct(ret)}</strong></div><div><span>CDI</span><strong>{cdi==null?'—':fmtPct(cdi)}</strong></div><div><span>Diferença</span><strong className={diff!=null&&diff<0?'warn':'green-txt'}>{diff==null?'—':(diff>=0?'+':'')+fmtPct(diff)}</strong></div><div><span>% do CDI</span><strong>{pct==null?'—':fmtPct(pct)}</strong></div></div><RefCard><div className="section-head"><div><h2>Carteira × CDI</h2><p>{periodLabel(period)} · retorno bruto com fluxos tratados como aportes</p></div></div><PerformanceBars ativos={ativos} ref={refTaxas} today={today} period={period}/></RefCard><RefCard><div className="section-head"><div><h2>Comparativo</h2><p>Rentabilidade líquida equivalente por mês</p></div><div className="chips compact">{[['tipo','Por tipo'],['instituicao','Por instituição']].map(x=><button key={x[0]} className={group===x[0]?'on':''} onClick={()=>setGroup(x[0])}>{x[1]}</button>)}</div></div><div className="comparison-table"><div className="ct-head"><span>{group==='tipo'?'Tipo':'Instituição'}</span><span>Atual líquido</span><span>Rent. líquida/mês</span></div>{rows.map(r=><div className="ct-row" key={r.k}><span>{group==='instituicao'?nomeInstituicao(r.k):r.k}</span><b>{fmtBRL(r.l)}</b><strong className="green-txt">{fmtPct(r.rm)}</strong></div>)}</div></RefCard></div>
+}
+function ReferenceInstitutions({ativos,metricsById,setTab}){
+ const grupos=grupoInstituicoes(ativos,metricsById), total=grupos.reduce((s,g)=>s+g.liquido,0)||1;
+ return <div className="screen"><div className="page-head"><div><h1>Instituições</h1><p>Consolidação por emissor</p></div></div><div className="two-col"><RefCard><div className="section-head"><div><h2>Alocação</h2><p>Patrimônio líquido</p></div></div><Donut items={grupos.map((g,i)=>({name:nomeInstituicao(g.nome),value:g.liquido,color:['#157EFF','#20C997','#F6B73C','#8B5CF6','#FF5D73','#16B7D8'][i%6]}))} total={total} centerLabel={fmtBRL(total)}/></RefCard><RefCard><div className="section-head"><div><h2>Emissores</h2><p>Concentração da carteira</p></div></div><div className="issuer-table">{grupos.map(g=><button key={g.key} className="issuer-row" onClick={()=>setTab('aplicacoes')}><div><b>{nomeInstituicao(g.nome)}</b><span>{g.items.length} investimentos</span></div><div><strong>{fmtBRL(g.liquido)}</strong><small>{fmtPct(g.liquido/total*100)}</small></div></button>)}</div></RefCard></div></div>
+}
+function App() {
+ const [loading,setLoading]=useState(true),[investments,setInvestments]=useState([]),[refTaxas,setRefTaxas]=useState(defaultRef),[taxaStatus,setTaxaStatus]=useState('manual'),[historicoIndices,setHistoricoIndices]=useState({cdi:[],selic:[],status:'idle'}),[tab,setTab]=useState('painel'),[period,setPeriod]=useState('mes'),[showForm,setShowForm]=useState(false),[editingId,setEditingId]=useState(null),[form,setForm]=useState(emptyForm),[formError,setFormError]=useState(''),[showDados,setShowDados]=useState(false),[backupMsg,setBackupMsg]=useState(''),[today,setToday]=useState(todayStr()),[historicoTick,setHistoricoTick]=useState(0);
+ const refreshTaxas=useCallback(()=>{setTaxaStatus('carregando');fetchTaxasBCB().then(data=>{const novo={cdi:data.cdi.valor,selic:data.selic.valor,ipca:data.ipca.valor,dataCDI:data.cdi.data,dataSelic:data.selic.data,dataIPCA:data.ipca.data,atualizado:today,fonte:'bcb'};setRefTaxas(novo);setTaxaStatus('conectado');storage.set('rf-taxas-referencia',JSON.stringify(novo));}).catch(()=>setTaxaStatus('offline'));},[today]);
+ useEffect(()=>{(async()=>{const r=await storage.get('rf-investimentos');if(r)try{setInvestments(JSON.parse(r.value))}catch(e){}const r2=await storage.get('rf-taxas-referencia');if(r2)try{setRefTaxas(JSON.parse(r2.value))}catch(e){}setLoading(false);refreshTaxas()})();const it=setInterval(()=>{setToday(todayStr());setHistoricoTick(x=>x+1);refreshTaxas()},3600000);const vis=()=>{if(document.visibilityState==='visible'){setToday(todayStr());setHistoricoTick(x=>x+1);refreshTaxas()}};document.addEventListener('visibilitychange',vis);return()=>{clearInterval(it);document.removeEventListener('visibilitychange',vis)}},[]);
+ const minDataCDI=useMemo(()=>investments.filter(i=>i.indexador==='CDI').map(i=>i.dataAplicacao).sort()[0]||null,[investments]), minDataSelic=useMemo(()=>investments.filter(i=>i.indexador==='SELIC').map(i=>i.dataAplicacao).sort()[0]||null,[investments]);
+ useEffect(()=>{let cancel=false;(async()=>{try{const [cdi,selic]=await Promise.all([minDataCDI?fetchHistoricoDiario(12,minDataCDI,today):Promise.resolve([]),minDataSelic?fetchHistoricoDiario(11,minDataSelic,today):Promise.resolve([])]);if(!cancel)setHistoricoIndices({cdi,selic,status:'ok'})}catch(e){if(!cancel)setHistoricoIndices(h=>({...h,status:'erro'}))}})();return()=>{cancel=true}},[minDataCDI,minDataSelic,today,historicoTick]);
+ const ref={...refTaxas,historicoCDI:historicoIndices.cdi,historicoSelic:historicoIndices.selic};
+ const [vTick,setVTick]=useState(0); async function persist(list){setInvestments(list);await storage.set('rf-investimentos',JSON.stringify(list));setVTick(x=>x+1)}
+ function openNew(){setForm(emptyForm);setEditingId(null);setFormError('');setShowForm(true)}
+ function openEdit(inv){setForm({...emptyForm,...inv,valorAplicado:String(inv.valorAplicado),parametroValor:inv.parametroValor??'',aliquotaIRManual:inv.aliquotaIRManual??'',taxaOverrideAnual:inv.taxaOverrideAnual??'',carteira:inv.carteira||'',vincularA:inv.groupId||'',tituloTesouro:inv.tituloTesouro||'',quantidade:inv.quantidade??'',precoUnitarioCompra:inv.precoUnitarioCompra??'',precoUnitarioAtual:inv.precoUnitarioAtual??'',valorAtualBrutoManual:inv.valorAtualBrutoManual??'',taxaCustodiaB3:inv.taxaCustodiaB3??'0.20',tesouroCupom:inv.tesouroCupom||'Não'});setEditingId(inv.id);setFormError('');setShowForm(true)}
+ function handleTipoChange(tipo){setForm(f=>({...f,tipo,isentoIR:TIPO_META[tipo].isentoDefault}))}
+ function handleSave(){if(!form.instituicao.trim())return setFormError('Informe a instituição / emissor.');if(!form.dataAplicacao)return setFormError('Informe a data de aplicação.');if(!form.dataVencimento)return setFormError('Informe o vencimento.');const valor=Number(form.valorAplicado);if(!valor||valor<=0)return setFormError('Informe um valor aplicado válido.');const grupoSelecionado=form.vincularA?investments.find(inv=>inv.id===form.vincularA||(inv.groupId||inv.id)===form.vincularA):null;const groupId=grupoSelecionado?(grupoSelecionado.groupId||grupoSelecionado.id):(editingId?((investments.find(inv=>inv.id===editingId)?.groupId)||editingId):uid());const campos={instituicao:form.instituicao.trim(),tipo:form.tipo,indexador:form.indexador,parametroValor:form.parametroValor===''?0:Number(form.parametroValor),dataAplicacao:form.dataAplicacao,dataVencimento:form.dataVencimento,valorAplicado:valor,liquidez:form.liquidez,isentoIR:!!form.isentoIR,aliquotaIRManual:form.aliquotaIRManual===''?'':Number(form.aliquotaIRManual),taxaOverrideAnual:form.taxaOverrideAnual===''?'':Number(form.taxaOverrideAnual),carteira:form.carteira.trim(),observacoes:form.observacoes,groupId,tituloTesouro:form.tituloTesouro?.trim()||'',quantidade:form.quantidade===''?'':Number(form.quantidade),precoUnitarioCompra:form.precoUnitarioCompra===''?'':Number(form.precoUnitarioCompra),precoUnitarioAtual:form.precoUnitarioAtual===''?'':Number(form.precoUnitarioAtual),valorAtualBrutoManual:form.valorAtualBrutoManual===''?'':Number(form.valorAtualBrutoManual),taxaCustodiaB3:form.taxaCustodiaB3===''?0.20:Number(form.taxaCustodiaB3),tesouroCupom:form.tesouroCupom||'Não'};if(editingId)persist(investments.map(inv=>inv.id===editingId?{...inv,...campos}:inv));else persist([...investments,{id:uid(),...campos,status:'ativo',historico:[{id:uid(),data:campos.dataAplicacao,valorBruto:valor}]}]);setShowForm(false)}
+ function deleteInvestment(id){if(confirm('Excluir esta aplicação?'))persist(investments.filter(i=>i.id!==id))}
+ function exportarBackup(){try{baixarBackup();setBackupMsg('Backup exportado.')}catch(e){setBackupMsg('Não foi possível exportar o backup.')}}
+ async function importarBackup(file){try{const payload=await lerBackupArquivo(file);if(!payload||payload.app!=='Razão — Renda Fixa'||!Array.isArray(payload.investments))throw new Error('Backup inválido.');if(!confirm(`Importar ${payload.investments.length} investimentos?`))return;await storage.set('rf-investimentos',JSON.stringify(payload.investments));if(payload.taxas)await storage.set('rf-taxas-referencia',JSON.stringify(payload.taxas));setInvestments(payload.investments);if(payload.taxas)setRefTaxas(payload.taxas);setBackupMsg(`Importados ${payload.investments.length} investimentos.`)}catch(e){setBackupMsg(e.message||'Falha ao importar backup.')}}
+ const ativos=useMemo(()=>investments.filter(i=>i.status==='ativo'),[investments]), metricsById=useMemo(()=>{const m={};investments.forEach(i=>m[i.id]=calcMetrics(i,today,ref));return m},[investments,today,refTaxas,historicoIndices,vTick]);
+ const totais=useMemo(()=>ativos.reduce((a,i)=>{const m=metricsById[i.id];a.aplicado+=Number(i.valorAplicado)||0;a.bruto+=m.valorAtualBruto||0;a.liquido+=m.valorAtualLiquido||0;a.estimadoVenc+=m.valorEstLiquidoVenc||0;return a},{aplicado:0,bruto:0,liquido:0,estimadoVenc:0}),[ativos,metricsById]), ganhoLiquido=totais.liquido-totais.aplicado, evolucao=useMemo(()=>buildEvolutionSeries(ativos,metricsById,today),[ativos,metricsById,today]);
+ if(loading)return <div className="loading-screen">Carregando sua carteira…</div>;
+ return <div className="ref-app"><ReferenceHeader refTaxas={refTaxas} status={taxaStatus} onRefresh={refreshTaxas} onNew={openNew} onDados={()=>{setBackupMsg('');setShowDados(true)}} tab={tab} setTab={setTab}/><main>{tab==='painel'&&<ReferenceDashboard ativos={ativos} totais={totais} ganhoLiquido={ganhoLiquido} metricsById={metricsById} refTaxas={ref} today={today} evolucao={evolucao} setTab={setTab} period={period} setPeriod={setPeriod}/>} {tab==='aplicacoes'&&<ReferenceApplications ativos={ativos} metricsById={metricsById} setTab={setTab} onNew={openNew} openEdit={openEdit} deleteInvestment={deleteInvestment}/>} {tab==='analise'&&<ReferenceAnalysis ativos={ativos} metricsById={metricsById} refTaxas={ref} today={today}/>} {tab==='instituicoes'&&<ReferenceInstitutions ativos={ativos} metricsById={metricsById} setTab={setTab}/>}</main><nav className="bottom-nav">{[['painel','Painel','grid'],['aplicacoes','Aplicações','wallet'],['analise','Análise','listOrdered'],['instituicoes','Mais','listChecks']].map(([k,l,ic])=><button key={k} className={tab===k?'active':''} onClick={()=>setTab(k)}><Icon name={ic} size={18}/><span>{l}</span></button>)}</nav>{showDados&&<DadosModal onClose={()=>setShowDados(false)} onExport={exportarBackup} onImport={importarBackup} message={backupMsg}/>} {showForm&&<FormModal form={form} setForm={setForm} editingId={editingId} formError={formError} refTaxas={ref} investments={investments} onClose={()=>setShowForm(false)} onSave={handleSave} onTipoChange={handleTipoChange}/>}</div>
 }
 
 function IndicadoresCarteira({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today, matrizMensal }) {
@@ -1112,6 +1049,107 @@ function FormModal({ form, setForm, editingId, formError, refTaxas, investments,
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+(function () {
+  const root = document.getElementById('root');
+  const source = document.getElementById('app-source');
+  const candidates = {
+    React: [
+      'https://unpkg.com/react@18.3.1/umd/react.production.min.js',
+      'https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js'
+    ],
+    ReactDOM: [
+      'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js',
+      'https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js'
+    ],
+    Babel: [
+      'https://unpkg.com/@babel/standalone@7.27.1/babel.min.js',
+      'https://cdn.jsdelivr.net/npm/@babel/standalone@7.27.1/babel.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.27.1/babel.min.js'
+    ]
+  };
+
+  function showBootError(message) {
+    if (!root) return;
+    root.innerHTML =
+      '<div style="min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:28px;background:#07111c;color:#f4f7fb;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;text-align:center">' +
+      '<div style="max-width:520px">' +
+      '<div style="font-size:18px;font-weight:800;margin-bottom:10px">Razão não conseguiu iniciar</div>' +
+      '<div style="font-size:14px;line-height:1.6;color:#91a0b2">O aplicativo não conseguiu carregar uma biblioteca necessária. Verifique sua conexão e recarregue a página.</div>' +
+      '<div style="margin-top:14px;font-size:11px;line-height:1.5;color:#647487;word-break:break-word">' + String(message || '').replace(/[<>&"]/g, '') + '</div>' +
+      '</div></div>';
+  }
+
+  function loadScript(url, timeoutMs) {
+    return new Promise(function(resolve, reject) {
+      var script = document.createElement('script');
+      var done = false;
+      var timer = setTimeout(function() {
+        if (done) return;
+        done = true;
+        script.remove();
+        reject(new Error('timeout: ' + url));
+      }, timeoutMs || 8000);
+      script.src = url;
+      script.async = false;
+      script.onload = function() {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(url);
+      };
+      script.onerror = function() {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        script.remove();
+        reject(new Error('failed: ' + url));
+      };
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadAny(name) {
+    var urls = candidates[name] || [];
+    var errors = [];
+    for (var i = 0; i < urls.length; i++) {
+      try {
+        await loadScript(urls[i], 8000);
+        if (name === 'React' && window.React) return;
+        if (name === 'ReactDOM' && window.ReactDOM) return;
+        if (name === 'Babel' && window.Babel) return;
+      } catch (e) {
+        errors.push(e.message);
+      }
+    }
+    throw new Error(name + ' indisponível. ' + errors.join(' | '));
+  }
+
+  async function boot() {
+    try {
+      await loadAny('React');
+      await loadAny('ReactDOM');
+      await loadAny('Babel');
+      if (!window.React || !window.ReactDOM || !window.Babel) {
+        throw new Error('Dependências carregadas sem expor as APIs esperadas.');
+      }
+      var code = window.Babel.transform(source.textContent, {
+        presets: ['react']
+      }).code;
+      var appScript = document.createElement('script');
+      appScript.text = code;
+      document.body.appendChild(appScript);
+    } catch (e) {
+      console.error('Razão boot error:', e);
+      showBootError(e && e.message ? e.message : e);
+    }
+  }
+
+  boot();
+})();
 </script>
 </body>
 </html>
