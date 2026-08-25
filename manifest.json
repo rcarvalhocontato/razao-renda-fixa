@@ -1,7 +1,7 @@
 {
   "name": "Razão — Renda Fixa",
   "short_name": "Razão",
-  "start_url": "./?v=14",
+  "start_url": "./?v=14.1",
   "display": "standalone",
   "background_color": "#07111c",
   "theme_color": "#07111c",
