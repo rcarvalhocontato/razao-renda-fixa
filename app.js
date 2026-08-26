@@ -14,7 +14,7 @@ const storage = {
 const C = {
     bg: '#0A0D12', panel: '#141922', panel2: '#1C232E', hairline: 'rgba(255,255,255,0.06)',
     text: '#EDEFF3', muted: '#6B7480', mutedLight: '#98A2AF',
-    lime: '#C6F135', red: '#F0555D', blue: '#5B9DF0', slate: '#7C93AC',
+    lime: '#22C55E', green: '#22C55E', red: '#F0555D', blue: '#2F80ED', slate: '#7C93AC',
 };
 const shadow = '0 1px 2px rgba(0,0,0,.5), 0 12px 28px -12px rgba(0,0,0,.65)';
 const TIPOS = ['CDB', 'LCI', 'LCA', 'CRI', 'CRA', 'Tesouro Direto', 'Debênture'];
@@ -29,11 +29,26 @@ const TIPO_META = {
 const INDEXADOR_COR = { 'CDI': C.lime, 'IPCA+': C.blue, 'Prefixado': C.slate, 'SELIC': C.red, 'Outro': C.muted };
 const IOF_TABLE = [96, 93, 90, 86, 83, 80, 76, 73, 70, 66, 63, 60, 56, 53, 50, 46, 43, 40, 36, 33, 30, 26, 23, 20, 16, 13, 10, 6, 3, 0];
 const BANK_BRANDS = [
-    ['BANCO DO BRASIL', 'BB', '#F7D117'], ['BTG PACTUAL', 'BTG', '#00A86B'], ['BTG', 'BTG', '#00A86B'],
-    ['ITAÚ', 'IT', '#EC7000'], ['ITAU', 'IT', '#EC7000'], ['BRADESCO', 'BD', '#CC092F'], ['SANTANDER', 'SAN', '#EC0000'],
-    ['CAIXA', 'CX', '#005CA9'], ['NUBANK', 'NU', '#820AD1'], ['INTER', 'IN', '#FF7A00'], ['XP', 'XP', '#151515'],
-    ['RICO', 'RI', '#F4B400'], ['SAFRA', 'SA', '#1E3A8A'], ['DAYCOVAL', 'DAY', '#00A98F'], ['BMG', 'BMG', '#0B5CAB'],
-    ['PICPAY', 'PP', '#21C25E'], ['PAGBANK', 'PG', '#00AEEF'], ['MERCADO PAGO', 'MP', '#00B1EA'], ['GENIAL', 'GE', '#00A3FF'],
+    ['BANCO DO BRASIL', 'BB', { bg: '#FFCC29', fg: '#0B3D2E' }],
+    ['BTG PACTUAL', 'BTG', { bg: '#0B1E3D', fg: '#FFFFFF', ring: '#2F6FED' }],
+    ['BTG', 'BTG', { bg: '#0B1E3D', fg: '#FFFFFF', ring: '#2F6FED' }],
+    ['ITAÚ', 'Itaú', { bg: '#EC7000', fg: '#FFFFFF' }],
+    ['ITAU', 'Itaú', { bg: '#EC7000', fg: '#FFFFFF' }],
+    ['BRADESCO', 'Bradesco', { bg: '#CC092F', fg: '#FFFFFF' }],
+    ['SANTANDER', 'Santander', { bg: '#EC0000', fg: '#FFFFFF' }],
+    ['CAIXA', 'Caixa', { bg: '#005CA9', fg: '#FFCC29' }],
+    ['NUBANK', 'nu', { bg: '#820AD1', fg: '#FFFFFF' }],
+    ['INTER', 'inter', { bg: '#FF7A00', fg: '#FFFFFF' }],
+    ['XP', 'xp', { bg: '#F5F5F5', fg: '#0A0D12' }],
+    ['RICO', 'Rico', { bg: '#F4B400', fg: '#0A0D12' }],
+    ['SAFRA', 'Safra', { bg: '#1E3A8A', fg: '#FFFFFF' }],
+    ['DAYCOVAL', 'Daycoval', { bg: '#00A98F', fg: '#FFFFFF' }],
+    ['BMG', 'BMG', { bg: '#0B5CAB', fg: '#FFFFFF' }],
+    ['PICPAY', 'PicPay', { bg: '#21C25E', fg: '#0A0D12' }],
+    ['PAGBANK', 'PagBank', { bg: '#00AEEF', fg: '#0A0D12' }],
+    ['MERCADO PAGO', 'Mercado Pago', { bg: '#00B1EA', fg: '#0A0D12' }],
+    ['GENIAL', 'Genial', { bg: '#00A3FF', fg: '#FFFFFF' }],
+    ['C6', 'C6', { bg: '#1A1A1A', fg: '#FFCC29' }],
 ];
 function normalizarInstituicao(nome) {
     return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()
@@ -43,8 +58,13 @@ function marcaInstituicao(nome) {
     const n = normalizarInstituicao(nome);
     const hit = BANK_BRANDS.find(([key]) => n.includes(normalizarInstituicao(key)));
     if (hit)
-        return { sigla: hit[1], cor: hit[2] };
-    return { sigla: '', cor: C.blue };
+        return { label: hit[1], ...hit[2] };
+    // Sem marca conhecida: gera uma cor estável a partir do nome.
+    const palette = ['#2F80ED', '#8B5CF6', '#F59E0B', '#20C997', '#FF5D73', '#16B7D8'];
+    let h = 0;
+    for (let i = 0; i < n.length; i++)
+        h = (h * 31 + n.charCodeAt(i)) >>> 0;
+    return { label: nomeInstituicao(nome).slice(0, 2).toUpperCase(), bg: palette[h % palette.length], fg: '#FFFFFF' };
 }
 function nomeInstituicao(nome) {
     const n = normalizarInstituicao(nome);
@@ -59,9 +79,16 @@ function nomeInstituicao(nome) {
     return hit ? hit[1] : String(nome || '').trim();
 }
 function InstitutionMark({ nome, size = 27 }) {
-    const { sigla, cor } = marcaInstituicao(nome);
-    const letra = sigla || nomeInstituicao(nome).slice(0, 2).toUpperCase();
-    return React.createElement("div", { className: "inst-mark", style: { width: size, height: size, fontSize: Math.max(9, size * 0.34), background: cor + '26', color: cor, border: `1px solid ${cor}55` } }, letra);
+    const m = marcaInstituicao(nome);
+    const fontSize = Math.max(9, size * (m.label.length > 3 ? 0.26 : 0.34));
+    return React.createElement("div", {
+        className: "inst-mark", style: {
+            width: size, height: size, fontSize,
+            background: m.bg, color: m.fg,
+            border: m.ring ? `2px solid ${m.ring}` : '1px solid rgba(255,255,255,0.08)',
+            fontStyle: /^[a-z]/.test(m.label) ? 'normal' : 'normal',
+        }
+    }, m.label);
 }
 const PERIODOS = [['mes', 'Mês'], ['ano', 'Ano'], ['todo', 'Todo o período']];
 function inicioPeriodo(periodo, today, investments) {
@@ -210,6 +237,67 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
             React.createElement("path", { d: "m3 14 2 2 4-4" }),
             React.createElement("line", { x1: "12", y1: "6", x2: "21", y2: "6" }),
             React.createElement("line", { x1: "12", y1: "14", x2: "21", y2: "14" })),
+        home: React.createElement(React.Fragment, null,
+            React.createElement("path", { d: "m3 10 9-7 9 7" }),
+            React.createElement("path", { d: "M5 9v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9" })),
+        bank: React.createElement(React.Fragment, null,
+            React.createElement("polygon", { points: "12 2 21 8 3 8" }),
+            React.createElement("line", { x1: "5", y1: "21", x2: "19", y2: "21" }),
+            React.createElement("line", { x1: "6", y1: "18", x2: "6", y2: "10" }),
+            React.createElement("line", { x1: "10", y1: "18", x2: "10", y2: "10" }),
+            React.createElement("line", { x1: "14", y1: "18", x2: "14", y2: "10" }),
+            React.createElement("line", { x1: "18", y1: "18", x2: "18", y2: "10" })),
+        barChart: React.createElement(React.Fragment, null,
+            React.createElement("line", { x1: "5", y1: "21", x2: "5", y2: "13" }),
+            React.createElement("line", { x1: "12", y1: "21", x2: "12", y2: "7" }),
+            React.createElement("line", { x1: "19", y1: "21", x2: "19", y2: "11" })),
+        menu: React.createElement(React.Fragment, null,
+            React.createElement("line", { x1: "4", y1: "6", x2: "20", y2: "6" }),
+            React.createElement("line", { x1: "4", y1: "12", x2: "20", y2: "12" }),
+            React.createElement("line", { x1: "4", y1: "18", x2: "20", y2: "18" })),
+        search: React.createElement(React.Fragment, null,
+            React.createElement("circle", { cx: "11", cy: "11", r: "7" }),
+            React.createElement("line", { x1: "21", y1: "21", x2: "16.65", y2: "16.65" })),
+        gear: React.createElement(React.Fragment, null,
+            React.createElement("circle", { cx: "12", cy: "12", r: "3" }),
+            React.createElement("path", { d: "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" })),
+        chevronRight: React.createElement("polyline", { points: "9 18 15 12 9 6" }),
+        download: React.createElement(React.Fragment, null,
+            React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
+            React.createElement("polyline", { points: "7 10 12 15 17 10" }),
+            React.createElement("line", { x1: "12", y1: "15", x2: "12", y2: "3" })),
+        upload: React.createElement(React.Fragment, null,
+            React.createElement("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }),
+            React.createElement("polyline", { points: "17 8 12 3 7 8" }),
+            React.createElement("line", { x1: "12", y1: "3", x2: "12", y2: "15" })),
+        calendar: React.createElement(React.Fragment, null,
+            React.createElement("rect", { x: "3", y: "4", width: "18", height: "18", rx: "2" }),
+            React.createElement("line", { x1: "16", y1: "2", x2: "16", y2: "6" }),
+            React.createElement("line", { x1: "8", y1: "2", x2: "8", y2: "6" }),
+            React.createElement("line", { x1: "3", y1: "10", x2: "21", y2: "10" })),
+        pieChart: React.createElement(React.Fragment, null,
+            React.createElement("path", { d: "M21.21 15.89A10 10 0 1 1 8 2.83" }),
+            React.createElement("path", { d: "M22 12A10 10 0 0 0 12 2v10z" })),
+        trendingUp: React.createElement(React.Fragment, null,
+            React.createElement("polyline", { points: "23 6 13.5 15.5 8.5 10.5 1 18" }),
+            React.createElement("polyline", { points: "17 6 23 6 23 12" })),
+        coins: React.createElement(React.Fragment, null,
+            React.createElement("circle", { cx: "8", cy: "8", r: "6" }),
+            React.createElement("path", { d: "M18.09 10.37A6 6 0 1 1 10.34 18" }),
+            React.createElement("path", { d: "M7 6h1v4" }),
+            React.createElement("path", { d: "m16.71 13.88.7.71-2.82 2.82" })),
+        leaf: React.createElement("path", { d: "M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z M2 21c0-9 4-13 4-13" }),
+        flag: React.createElement(React.Fragment, null,
+            React.createElement("path", { d: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" }),
+            React.createElement("line", { x1: "4", y1: "22", x2: "4", y2: "15" })),
+        percent: React.createElement(React.Fragment, null,
+            React.createElement("line", { x1: "19", y1: "5", x2: "5", y2: "19" }),
+            React.createElement("circle", { cx: "6.5", cy: "6.5", r: "2.5" }),
+            React.createElement("circle", { cx: "17.5", cy: "17.5", r: "2.5" })),
+        dots: React.createElement(React.Fragment, null,
+            React.createElement("circle", { cx: "5", cy: "12", r: "1.5" }),
+            React.createElement("circle", { cx: "12", cy: "12", r: "1.5" }),
+            React.createElement("circle", { cx: "19", cy: "12", r: "1.5" })),
     };
     return React.createElement("svg", { ...p }, paths[name]);
 }
@@ -365,6 +453,48 @@ function descricaoTaxa(inv, ref) {
     if (inv.indexador === 'Prefixado')
         return `${fmtPct(p)} a.a. (prefixado)`;
     return `${fmtPct(p)} a.a.`;
+}
+function taxaCurta(inv) {
+    const p = Number(inv.parametroValor) || 0;
+    if (inv.indexador === 'CDI')
+        return `${p}% do CDI`;
+    if (inv.indexador === 'SELIC')
+        return `${p}% da Selic`;
+    if (inv.indexador === 'IPCA+')
+        return `IPCA+ ${fmtPct(p)}`;
+    return `${fmtPct(p)} a.a.`;
+}
+function tituloInvestimento(inv) {
+    if (inv.tituloTesouro)
+        return inv.tituloTesouro;
+    return `${inv.tipo} ${taxaCurta(inv)}`;
+}
+function pctCDIGrupo(items, metricsById, ref) {
+    let num = 0, den = 0;
+    items.forEach(inv => {
+        const m = metricsById[inv.id];
+        if (!m || !(m.valorAtualLiquido > 0))
+            return;
+        const p = percentualCDIEquivalente(inv, ref, Math.max(m.diasCorridos, 1));
+        if (p == null)
+            return;
+        num += p * m.valorAtualLiquido;
+        den += m.valorAtualLiquido;
+    });
+    return den > 0 ? num / den : null;
+}
+function bucketPrazo(diasRestantes) {
+    if (diasRestantes == null)
+        return 'Sem data';
+    if (diasRestantes < 0)
+        return 'Vencido';
+    if (diasRestantes <= 180)
+        return 'Até 6 meses';
+    if (diasRestantes <= 365)
+        return '6 a 12 meses';
+    if (diasRestantes <= 730)
+        return '1 a 2 anos';
+    return 'Mais de 2 anos';
 }
 function calcMetrics(inv, today, ref) {
     const diasCorridos = Math.max(diffDays(inv.dataAplicacao, today), 0);
@@ -878,6 +1008,12 @@ function Donut({ items, total, centerLabel }) {
             React.createElement("span", null, x.name),
             React.createElement("b", null, fmtPct(x.value / total * 100))))));
 }
+function fmtBRLk(v) {
+    const n = Number(v) || 0;
+    if (Math.abs(n) >= 1000)
+        return 'R$ ' + Math.round(n / 1000) + 'k';
+    return fmtBRL(n);
+}
 function PortfolioLine({ series }) {
     if (!series || series.length < 2)
         return React.createElement("div", { className: "empty-chart" }, "Cadastre posi\u00E7\u00F5es em datas diferentes para visualizar a evolu\u00E7\u00E3o.");
@@ -885,18 +1021,23 @@ function PortfolioLine({ series }) {
     const pts = vals.map((v, i) => [p + i / (vals.length - 1) * (W - p * 2), H - p - (v - min) / range * (H - p * 2)]);
     const path = pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
     const area = path + ` L${W - p},${H - p} L${p},${H - p} Z`;
+    const gridVals = [max, min + (max - min) * 0.66, min + (max - min) * 0.33, min];
+    const gridYs = gridVals.map(v => H - p - (v - min) / range * (H - p * 2));
     return React.createElement("div", { className: "chart-box" },
         React.createElement("div", { className: "chart-top" },
-            React.createElement("span", null, fmtBRL(max)),
+            React.createElement("span", null, "Evolu\u00E7\u00E3o do patrim\u00F4nio"),
             React.createElement("b", null, fmtBRL(vals[vals.length - 1]))),
-        React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" },
-            React.createElement("defs", null,
-                React.createElement("linearGradient", { id: "rfArea", x1: "0", x2: "0", y1: "0", y2: "1" },
-                    React.createElement("stop", { offset: "0", stopColor: "#19D8A1", stopOpacity: ".35" }),
-                    React.createElement("stop", { offset: "1", stopColor: "#19D8A1", stopOpacity: "0" }))),
-            React.createElement("path", { d: area, fill: "url(#rfArea)" }),
-            React.createElement("path", { d: path, fill: "none", stroke: "#19D8A1", strokeWidth: "3", vectorEffect: "non-scaling-stroke" }),
-            React.createElement("circle", { cx: pts.at(-1)[0], cy: pts.at(-1)[1], r: "4", fill: "#19D8A1" })),
+        React.createElement("div", { className: "linechart-body" },
+            React.createElement("div", { className: "linechart-yaxis" }, gridVals.map((v, i) => React.createElement("span", { key: i }, fmtBRLk(v)))),
+            React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" },
+                React.createElement("defs", null,
+                    React.createElement("linearGradient", { id: "rfArea", x1: "0", x2: "0", y1: "0", y2: "1" },
+                        React.createElement("stop", { offset: "0", stopColor: "#22C55E", stopOpacity: ".35" }),
+                        React.createElement("stop", { offset: "1", stopColor: "#22C55E", stopOpacity: "0" }))),
+                gridYs.map((y, i) => React.createElement("line", { key: i, x1: p, x2: W - p, y1: y, y2: y, stroke: "rgba(255,255,255,0.06)", strokeWidth: "1" })),
+                React.createElement("path", { d: area, fill: "url(#rfArea)" }),
+                React.createElement("path", { d: path, fill: "none", stroke: "#22C55E", strokeWidth: "3", vectorEffect: "non-scaling-stroke" }),
+                React.createElement("circle", { cx: pts.at(-1)[0], cy: pts.at(-1)[1], r: "4", fill: "#22C55E" }))),
         React.createElement("div", { className: "chart-axis" },
             React.createElement("span", null, series[0].date),
             React.createElement("span", null, series[Math.floor(series.length / 2)].date),
@@ -933,58 +1074,28 @@ function ReferenceHeader({ refTaxas, status, onRefresh, onNew, onDados, tab, set
     return React.createElement(React.Fragment, null,
         React.createElement("header", { className: "ref-header" },
             React.createElement("div", { className: "topbar" },
-                React.createElement("button", { className: "header-icon", onClick: () => setTab('mais'), "aria-label": "Mais" },
-                    React.createElement(Icon, { name: "listChecks", size: 18 })),
+                React.createElement("button", { className: "header-icon", onClick: () => setTab('mais'), "aria-label": "Menu" },
+                    React.createElement(Icon, { name: "menu", size: 19 })),
                 React.createElement("div", { className: "brand" },
-                    React.createElement("img", { src: "icon-v14.png" }),
-                    React.createElement("div", null,
-                        React.createElement("div", { className: "brand-name" }, "RAZ\u00C3O"),
-                        React.createElement("div", { className: "brand-sub" }, "RENDA FIXA"))),
-                React.createElement("div", { className: "head-actions" },
-                    React.createElement("button", { className: "primary-btn", onClick: onNew },
-                        React.createElement(Icon, { name: "plus", size: 17 }),
-                        " Nova"),
-                    React.createElement("button", { className: "header-icon", onClick: () => setTab('mais'), "aria-label": "Configura\u00E7\u00F5es" }, "\u2699"))),
-            React.createElement("div", { className: "rates" },
-                React.createElement("span", { className: `status-dot ${status === 'conectado' ? 'live' : ''}` }),
-                React.createElement("span", null, "BCB"),
-                React.createElement("button", { className: "refresh", onClick: onRefresh },
-                    React.createElement(Icon, { name: "refresh", size: 14 })),
-                React.createElement("span", { className: "sep" }),
-                React.createElement("span", null,
-                    "CDI ",
-                    React.createElement("b", null, fmtPct(refTaxas.cdi))),
-                React.createElement("span", null,
-                    "Selic ",
-                    React.createElement("b", null, fmtPct(refTaxas.selic))),
-                React.createElement("span", null,
-                    "IPCA 12m ",
-                    React.createElement("b", null, fmtPct(refTaxas.ipca))),
-                React.createElement("span", { className: "refdate" },
-                    "ref. ",
-                    fmtData(refTaxas.dataCDI))),
-            React.createElement("nav", { className: "desktop-tabs" }, [['painel', 'Painel', 'grid'], ['aplicacoes', 'Aplicações', 'wallet'], ['analise', 'Análise', 'listOrdered'], ['mais', 'Mais', 'listChecks']].map(([k, l, ic]) => React.createElement("button", { key: k, className: tab === k ? 'active' : '', onClick: () => setTab(k) },
+                    React.createElement("div", { className: "brand-name" }, "RAZ\u00C3O"),
+                    React.createElement("div", { className: "brand-sub" }, "RENDA FIXA")),
+                React.createElement("button", { className: "header-icon", onClick: () => setTab('mais'), "aria-label": "Configura\u00E7\u00F5es" },
+                    React.createElement(Icon, { name: "gear", size: 18 }))),
+            React.createElement("nav", { className: "desktop-tabs" }, [['painel', 'Painel', 'home'], ['aplicacoes', 'Aplica\u00E7\u00F5es', 'bank'], ['analise', 'An\u00E1lise', 'barChart'], ['mais', 'Mais', 'menu']].map(([k, l, ic]) => React.createElement("button", { key: k, className: tab === k ? 'active' : '', onClick: () => setTab(k) },
                 React.createElement(Icon, { name: ic, size: 15 }),
                 l)))));
 }
 function RefCard({ children, className = '' }) { return React.createElement("section", { className: 'ref-card ' + className }, children); }
 function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxas, today, evolucao, setTab, period, setPeriod }) {
-    const start = periodStart(period, today, ativos), ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = cdiReturnMD(ativos, start, today, refTaxas, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
     const grupos = grupoInstituicoes(ativos, metricsById);
-    const total = totais.liquido || 1;
-    const donutItems = grupos.map((g, i) => ({ name: nomeInstituicao(g.nome), value: g.liquido, color: ['#157EFF', '#20C997', '#F6B73C', '#8B5CF6', '#FF5D73', '#16B7D8'][i % 6] }));
-    const proximos = ativos.slice().sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento)).slice(0, 3);
-    const alerts = [];
-    if (grupos[0] && grupos[0].liquido / total > .4)
-        alerts.push({ title: 'Concentração', text: `${fmtPct(grupos[0].liquido / total * 100)} da carteira está em ${nomeInstituicao(grupos[0].nome)}.` });
-    const venc30 = ativos.filter(i => metricsById[i.id].diasRestantes >= 0 && metricsById[i.id].diasRestantes <= 30).reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0);
-    if (venc30)
-        alerts.push({ title: 'Vencimentos', text: `${fmtBRL(venc30)} vencem nos próximos 30 dias.` });
-    const low = ativos.slice().sort((a, b) => (metricsById[a.id].rentLiquidaMensal ?? 99) - (metricsById[b.id].rentLiquidaMensal ?? 99))[0];
-    if (low)
-        alerts.push({ title: 'Revisar', text: `${low.tipo} em ${nomeInstituicao(low.instituicao)} está em ${fmtPct(metricsById[low.id].rentLiquidaMensal)} líquido/mês.` });
-    const best = ativos.slice().sort((a, b) => (metricsById[b.id].rentLiquidaMensal ?? -99) - (metricsById[a.id].rentLiquidaMensal ?? -99)).slice(0, 4);
+    const inicioMes = periodStart('mes', today, ativos), inicioAno = periodStart('ano', today, ativos);
+    const retMes = periodReturnMD(ativos, inicioMes, today, refTaxas, today, metricsById), cdiMes = cdiReturnMD(ativos, inicioMes, today, refTaxas, today);
+    const retAno = periodReturnMD(ativos, inicioAno, today, refTaxas, today, metricsById), cdiAno = cdiReturnMD(ativos, inicioAno, today, refTaxas, today);
+    const pctMes = retMes != null && cdiMes > 0 ? retMes / cdiMes * 100 : null, pctAno = retAno != null && cdiAno > 0 ? retAno / cdiAno * 100 : null;
+    const vencProximos = ativos.filter(i => metricsById[i.id].diasRestantes != null && metricsById[i.id].diasRestantes >= 0 && metricsById[i.id].diasRestantes <= 60);
     return React.createElement("div", { className: "screen" },
+        React.createElement("div", { className: "page-head" },
+            React.createElement("h1", null, "Painel")),
         React.createElement(RefCard, { className: "hero-card" },
             React.createElement("div", { className: "hero-label" }, "Patrim\u00F4nio l\u00EDquido"),
             React.createElement("div", { className: "hero-row" },
@@ -992,100 +1103,50 @@ function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxa
                     React.createElement("div", { className: "hero-value" }, fmtBRL(totais.liquido)),
                     React.createElement("div", { className: "hero-gain" },
                         "+",
-                        fmtBRL(Math.max(ganhoLiquido, 0)).replace('R$ ', 'R$ '),
+                        fmtBRL(Math.max(ganhoLiquido, 0)),
                         " ",
                         React.createElement("span", null,
                             "\u25B2 ",
                             fmtPct(totais.aplicado > 0 ? ganhoLiquido / totais.aplicado * 100 : 0))),
-                    React.createElement("div", { className: "hero-note" },
-                        ativos.length,
-                        " investimentos \u00B7 ",
-                        grupos.length,
-                        " institui\u00E7\u00F5es")),
+                    React.createElement("div", { className: "hero-note" }, "Ganho l\u00EDquido (desde o in\u00EDcio)")),
                 React.createElement("div", { className: "hero-spark" },
                     React.createElement(PortfolioLine, { series: evolucao })))),
         React.createElement("div", { className: "two-col stats-row" },
             React.createElement(RefCard, null,
-                React.createElement("div", { className: "card-title" }, "Rentabilidade"),
-                React.createElement("div", { className: "period-switch" }, [['mes', 'Mês'], ['ano', 'Ano'], ['todo', 'Desde o início']].map(x => React.createElement("button", { key: x[0], className: period === x[0] ? 'sel' : '', onClick: () => setPeriod(x[0]) }, x[1]))),
-                React.createElement("div", { className: "metric-pair" },
-                    React.createElement("div", null,
-                        React.createElement("span", null, "Sua carteira"),
-                        React.createElement("strong", { className: ret != null && cdi != null && ret < cdi ? 'warn' : '' }, ret == null ? '—' : fmtPct(ret))),
-                    React.createElement("div", null,
-                        React.createElement("span", null, "CDI"),
-                        React.createElement("strong", null, cdi == null ? '—' : fmtPct(cdi)))),
-                React.createElement("div", { className: "compare-line" },
-                    React.createElement("div", { style: { width: `${Math.min(100, Math.max(0, pct || 0))}%` } })),
-                React.createElement("div", { className: "compare-foot" },
-                    React.createElement("span", null, pct == null ? '—' : fmtPct(pct) + ' do CDI'),
-                    React.createElement("span", { className: diff != null && diff < 0 ? 'warn' : '' }, diff == null ? '—' : (diff >= 0 ? '+' : '') + fmtPct(diff)))),
+                React.createElement("div", { className: "card-title" }, "Rentabilidade (m\u00EAs)"),
+                React.createElement("div", { className: "hero-value small" }, retMes == null ? '\u2014' : fmtPct(retMes)),
+                React.createElement("div", { className: "hero-gain" }, pctMes == null ? '\u2014' : React.createElement(React.Fragment, null, "\u25B2 ", fmtPct(pctMes), " do CDI")),
+                React.createElement("div", { className: "hero-note" }, "CDI: ", cdiMes == null ? '\u2014' : fmtPct(cdiMes))),
             React.createElement(RefCard, null,
+                React.createElement("div", { className: "card-title" }, "Rentabilidade (ano)"),
+                React.createElement("div", { className: "hero-value small" }, retAno == null ? '\u2014' : fmtPct(retAno)),
+                React.createElement("div", { className: "hero-gain" }, pctAno == null ? '\u2014' : React.createElement(React.Fragment, null, "\u25B2 ", fmtPct(pctAno), " do CDI")),
+                React.createElement("div", { className: "hero-note" }, "CDI: ", cdiAno == null ? '\u2014' : fmtPct(cdiAno)))),
+        React.createElement("div", { className: "two-col stats-row" },
+            React.createElement(RefCard, { className: "clickable", onClick: () => setTab('instituicoes') },
                 React.createElement("div", { className: "card-title" }, "Carteira"),
-                React.createElement("div", { className: "mini-grid" },
+                React.createElement("div", { className: "carteira-stats" },
                     React.createElement("div", null,
-                        React.createElement("span", null, "Patrim\u00F4nio bruto"),
-                        React.createElement("b", null, fmtBRL(totais.bruto))),
+                        React.createElement("strong", null, grupos.length),
+                        React.createElement("span", null, "institui\u00E7\u00F5es")),
                     React.createElement("div", null,
-                        React.createElement("span", null, "Ganho l\u00EDquido"),
-                        React.createElement("b", { className: "green-txt" }, fmtBRL(ganhoLiquido))),
+                        React.createElement("strong", null, ativos.length),
+                        React.createElement("span", null, "investimentos")))),
+            React.createElement(RefCard, { className: "clickable atencao-card", onClick: () => setTab('aplicacoes') },
+                React.createElement("div", { className: "card-title" }, "Aten\u00E7\u00E3o"),
+                React.createElement("div", { className: "atencao-row" },
+                    React.createElement("div", { className: "atencao-icon" },
+                        React.createElement(Icon, { name: "alert", size: 17 })),
                     React.createElement("div", null,
-                        React.createElement("span", null, "Aplicado"),
-                        React.createElement("b", null, fmtBRL(totais.aplicado))),
-                    React.createElement("div", null,
-                        React.createElement("span", null, "Pr\u00F3ximos vencimentos"),
-                        React.createElement("b", null, fmtBRL(proximos.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0))))))),
-        React.createElement("div", { className: "two-col" },
-            React.createElement(RefCard, null,
-                React.createElement("div", { className: "section-head" },
-                    React.createElement("div", null,
-                        React.createElement("h2", null, "Evolu\u00E7\u00E3o patrimonial"),
-                        React.createElement("p", null, "Patrim\u00F4nio l\u00EDquido ao longo do per\u00EDodo"))),
-                React.createElement(PortfolioLine, { series: evolucao })),
-            React.createElement(RefCard, null,
-                React.createElement("div", { className: "section-head" },
-                    React.createElement("div", null,
-                        React.createElement("h2", null, "Desempenho"),
-                        React.createElement("p", null, "Carteira comparada ao CDI"))),
-                React.createElement(PerformanceBars, { ativos: ativos, refTaxas: refTaxas, today: today, period: period }))),
-        React.createElement("div", { className: "two-col" },
-            React.createElement(RefCard, null,
-                React.createElement("div", { className: "section-head" },
-                    React.createElement("div", null,
-                        React.createElement("h2", null, "Composi\u00E7\u00E3o"),
-                        React.createElement("p", null, "Por institui\u00E7\u00E3o")),
-                    React.createElement("button", { className: "text-btn", onClick: () => setTab('instituicoes') }, "Ver tudo")),
-                React.createElement(Donut, { items: donutItems, total: total, centerLabel: fmtBRL(total) })),
-            React.createElement(RefCard, null,
-                React.createElement("div", { className: "section-head" },
-                    React.createElement("div", null,
-                        React.createElement("h2", null, "Insights"),
-                        React.createElement("p", null, "Foco no que merece aten\u00E7\u00E3o"))),
-                React.createElement("div", { className: "insight-list" }, alerts.slice(0, 3).map((a, i) => React.createElement("div", { className: "insight", key: i },
-                    React.createElement("div", { className: 'insight-icon i' + i }, i === 0 ? '◔' : i === 1 ? '◫' : '↗'),
-                    React.createElement("div", null,
-                        React.createElement("b", null, a.title),
-                        React.createElement("span", null, a.text)),
-                    React.createElement("span", { className: "chev" }, "\u203A")))))),
-        React.createElement(RefCard, null,
-            React.createElement("div", { className: "section-head" },
-                React.createElement("div", null,
-                    React.createElement("h2", null, "Melhores investimentos"),
-                    React.createElement("p", null, "Rentabilidade l\u00EDquida equivalente por m\u00EAs")),
-                React.createElement("button", { className: "text-btn", onClick: () => setTab('analise') }, "Ver an\u00E1lise")),
-            React.createElement("div", { className: "rank-table" }, best.map(inv => React.createElement("div", { className: "rank-row", key: inv.id },
-                React.createElement("div", null,
-                    React.createElement("b", null, inv.tipo),
-                    React.createElement("span", null,
-                        nomeInstituicao(inv.instituicao),
-                        " \u00B7 ",
-                        descricaoTaxa(inv, refTaxas))),
-                React.createElement("strong", { className: "green-txt" }, fmtPct(metricsById[inv.id].rentLiquidaMensal)))))));
+                        React.createElement("strong", null, vencProximos.length),
+                        React.createElement("span", null, "vencimentos em at\u00E9 60 dias"))))));
 }
-function ReferenceApplications({ ativos, metricsById, setTab, onNew, openEdit, deleteInvestment }) {
-    const [filter, setFilter] = useState('Todos'), [q, setQ] = useState(''), [selected, setSelected] = useState(null), [selectedInv, setSelectedInv] = useState(null);
-    const grupos = grupoInstituicoes(ativos, metricsById).filter(g => { const ok = filter === 'Todos' || (filter === 'CDB' && g.items.some(i => i.tipo === 'CDB')) || (filter === 'LCI/LCA' && g.items.some(i => ['LCI', 'LCA'].includes(i.tipo))) || (filter === 'Tesouro' && g.items.some(i => i.tipo === 'Tesouro Direto')); const text = nomeInstituicao(g.nome).toLowerCase().includes(q.toLowerCase()); return ok && text; });
-    const g = selected ? grupos.find(x => x.key === selected) : null;
+function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, onNew, openEdit, deleteInvestment }) {
+    const [filter, setFilter] = useState('Todas'), [q, setQ] = useState(''), [searchOpen, setSearchOpen] = useState(false), [selected, setSelected] = useState(null), [selectedInv, setSelectedInv] = useState(null);
+    const passaFiltro = (g) => filter === 'Todas' || (filter === 'CDB' && g.items.some(i => i.tipo === 'CDB')) || (filter === 'LCI/LCA' && g.items.some(i => ['LCI', 'LCA'].includes(i.tipo))) || (filter === 'Tesouro' && g.items.some(i => i.tipo === 'Tesouro Direto')) || (filter === 'Outros' && g.items.some(i => !['CDB', 'LCI', 'LCA', 'Tesouro Direto'].includes(i.tipo)));
+    const grupos = grupoInstituicoes(ativos, metricsById).filter(g => passaFiltro(g) && nomeInstituicao(g.nome).toLowerCase().includes(q.toLowerCase()));
+    const totalCarteira = ativos.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0) || 1;
+    const g = selected ? grupos.find(x => x.key === selected) || grupoInstituicoes(ativos, metricsById).find(x => x.key === selected) : null;
     if (g && selectedInv) {
         const inv = g.items.find(x => x.id === selectedInv), m = inv ? metricsById[inv.id] : null;
         if (!inv)
@@ -1096,118 +1157,107 @@ function ReferenceApplications({ ativos, metricsById, setTab, onNew, openEdit, d
                 nomeInstituicao(g.nome)),
             React.createElement(RefCard, { className: "detail-hero" },
                 React.createElement("div", null,
-                    React.createElement("span", { className: "type-pill" }, inv.tipo),
-                    React.createElement("h1", null, inv.tituloTesouro || descricaoTaxa(inv, { cdi: 14.9, selic: 14, ipca: 4.6 })),
+                    React.createElement("span", { className: "type-pill green" }, inv.tipo),
+                    React.createElement("h1", null, tituloInvestimento(inv)),
                     React.createElement("p", null,
-                        nomeInstituicao(inv.instituicao),
-                        " \u00B7 ",
                         fmtData(inv.dataAplicacao),
                         " \u2192 ",
                         fmtData(inv.dataVencimento))),
-                React.createElement("button", { className: "primary-btn", onClick: () => openEdit(inv) }, "Editar")),
-            React.createElement("div", { className: "detail-metrics" },
-                React.createElement(RefCard, null,
+                React.createElement(InstitutionMark, { nome: inv.instituicao, size: 40 })),
+            React.createElement(RefCard, { className: "detail-rows" },
+                React.createElement("div", { className: "detail-row" },
                     React.createElement("span", null, "Valor l\u00EDquido atual"),
                     React.createElement("strong", null, fmtBRL(m.valorAtualLiquido))),
-                React.createElement(RefCard, null,
-                    React.createElement("span", null, "Rendimento l\u00EDquido/m\u00EAs"),
-                    React.createElement("strong", { className: "green-txt" }, fmtPct(m.rentLiquidaMensal))),
-                React.createElement(RefCard, null,
-                    React.createElement("span", null, "Ganho l\u00EDquido"),
-                    React.createElement("strong", null, fmtBRL(m.valorAtualLiquido - inv.valorAplicado))),
-                React.createElement(RefCard, null,
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Rentabilidade"),
+                    React.createElement("strong", null, taxaCurta(inv))),
+                React.createElement("div", { className: "detail-row" },
                     React.createElement("span", null, "Vencimento"),
-                    React.createElement("strong", null, m.diasRestantes >= 0 ? `${m.diasRestantes} dias` : 'vencido'))),
-            React.createElement(RefCard, null,
-                React.createElement("div", { className: "section-head" },
-                    React.createElement("div", null,
-                        React.createElement("h2", null, "Resumo"),
-                        React.createElement("p", null, "Dados calculados da posi\u00E7\u00E3o"))),
-                React.createElement("div", { className: "mini-grid" },
-                    React.createElement("div", null,
-                        React.createElement("span", null, "Valor aplicado"),
-                        React.createElement("b", null, fmtBRL(inv.valorAplicado))),
-                    React.createElement("div", null,
-                        React.createElement("span", null, "Valor bruto atual"),
-                        React.createElement("b", null, fmtBRL(m.valorAtualBruto))),
-                    React.createElement("div", null,
-                        React.createElement("span", null, "Rentabilidade bruta"),
-                        React.createElement("b", null, fmtPct(m.rentabilidadeBruta))),
-                    React.createElement("div", null,
-                        React.createElement("span", null, "IR/IOF estimado"),
-                        React.createElement("b", null, fmtBRL(Math.max(m.valorAtualBruto - m.valorAtualLiquido, 0)))))));
+                    React.createElement("strong", null, fmtData(inv.dataVencimento))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Dias restantes"),
+                    React.createElement("strong", null, m.diasRestantes >= 0 ? m.diasRestantes : 'vencido')),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Ganho l\u00EDquido (total)"),
+                    React.createElement("strong", { className: "green-txt" },
+                        fmtBRL(m.valorAtualLiquido - inv.valorAplicado),
+                        " \u25B2 ",
+                        fmtPct(m.rentLiquidaTotal))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Liquidez"),
+                    React.createElement("strong", null, inv.liquidez))),
+            React.createElement("div", { className: "detail-actions" },
+                React.createElement("button", { className: "text-btn", onClick: () => openEdit(inv) }, "Editar"),
+                React.createElement("button", { className: "text-btn warn", onClick: () => deleteInvestment(inv.id) }, "Excluir")));
     }
-    if (g)
+    if (g) {
+        const pctCDI = pctCDIGrupo(g.items, metricsById, refTaxas);
         return React.createElement("div", { className: "screen" },
             React.createElement("button", { className: "back-btn", onClick: () => setSelected(null) }, "\u2039 Aplica\u00E7\u00F5es"),
             React.createElement(RefCard, { className: "institution-hero" },
                 React.createElement("div", { className: "inst-head-left" },
-                    React.createElement(InstitutionMark, { nome: g.nome, size: 44 }),
+                    React.createElement(InstitutionMark, { nome: g.nome, size: 48 }),
                     React.createElement("div", null,
-                        React.createElement("div", { className: "eyebrow" }, "Institui\u00E7\u00E3o"),
-                        React.createElement("h1", null, nomeInstituicao(g.nome)),
+                        React.createElement("div", { className: "eyebrow" }, nomeInstituicao(g.nome)),
                         React.createElement("span", null,
                             g.items.length,
                             " investimentos"))),
                 React.createElement("div", { className: "inst-total" },
-                    fmtBRL(g.liquido),
-                    React.createElement("small", null,
-                        g.aplicado > 0 ? fmtPct((g.liquido / g.aplicado - 1) * 100) : '—',
-                        " acumulado"))),
-            React.createElement("div", { className: "detail-list" }, g.items.map(inv => { const m = metricsById[inv.id]; return React.createElement(RefCard, { key: inv.id, className: "investment-card" },
-                React.createElement("button", { className: "investment-hit", onClick: () => setSelectedInv(inv.id) },
-                    React.createElement("div", { className: "inv-head" },
-                        React.createElement("div", null,
-                            React.createElement("span", { className: "type-pill" }, inv.tipo),
-                            React.createElement("h3", null, inv.tituloTesouro || descricaoTaxa(inv, { cdi: 14.9, selic: 14, ipca: 4.6 })),
-                            React.createElement("p", null,
-                                fmtData(inv.dataAplicacao),
-                                " \u2192 ",
-                                fmtData(inv.dataVencimento))),
-                        React.createElement("span", { className: "chev" }, "\u203A")),
-                    React.createElement("div", { className: "inv-values" },
-                        React.createElement("div", null,
-                            React.createElement("span", null, "Valor l\u00EDquido atual"),
-                            React.createElement("b", null, fmtBRL(m.valorAtualLiquido))),
-                        React.createElement("div", null,
-                            React.createElement("span", null, "Rendimento l\u00EDquido/m\u00EAs"),
-                            React.createElement("b", { className: "green-txt" }, fmtPct(m.rentLiquidaMensal))),
-                        React.createElement("div", null,
-                            React.createElement("span", null, "Ganho l\u00EDquido"),
-                            React.createElement("b", null, fmtBRL(m.valorAtualLiquido - inv.valorAplicado))),
-                        React.createElement("div", null,
-                            React.createElement("span", null, "Vencimento"),
-                            React.createElement("b", null, m.diasRestantes >= 0 ? `${m.diasRestantes} dias` : 'vencido')))),
-                React.createElement("div", { className: "inv-actions" },
-                    React.createElement("button", { onClick: () => openEdit(inv) }, "Editar"),
-                    React.createElement("button", { onClick: () => deleteInvestment(inv.id) }, "Excluir"))); })));
+                    React.createElement("span", null, "Total l\u00EDquido"),
+                    React.createElement("strong", null, fmtBRL(g.liquido)),
+                    pctCDI != null && React.createElement("small", { className: "green-txt" }, fmtPct(pctCDI), " do CDI"))),
+            pctCDI != null && React.createElement("div", { className: "cdi-bar" },
+                React.createElement("div", { style: { width: Math.min(100, Math.max(4, pctCDI)) + '%' } })),
+            React.createElement("div", { className: "section-head" },
+                React.createElement("h2", null, "Investimentos")),
+            React.createElement("div", { className: "detail-list" }, g.items.map(inv => {
+                const m = metricsById[inv.id];
+                const card = React.createElement("button", { className: "investment-hit", onClick: () => setSelectedInv(inv.id) },
+                    React.createElement("div", { className: "inv-top" },
+                        React.createElement("h3", null, tituloInvestimento(inv)),
+                        React.createElement("span", { className: "type-pill" }, inv.tipo)),
+                    React.createElement("div", { className: "inv-mid" },
+                        React.createElement("strong", { className: "green-txt" }, fmtBRL(m.valorAtualLiquido)),
+                        React.createElement("span", { className: "inv-venc" },
+                            React.createElement("i", { className: "dot green" }),
+                            m.diasRestantes >= 0 ? `Vence em ${fmtData(inv.dataVencimento)}` : 'Vencido')),
+                    React.createElement("div", { className: "inv-rate" },
+                        React.createElement("i", { className: "dot green" }),
+                        taxaCurta(inv)));
+                return React.createElement(RefCard, { key: inv.id, className: "investment-card" }, card);
+            })));
+    }
     return React.createElement("div", { className: "screen" },
         React.createElement("div", { className: "page-head" },
-            React.createElement("div", null,
-                React.createElement("h1", null, "Aplica\u00E7\u00F5es"),
-                React.createElement("p", null, "Organizadas por institui\u00E7\u00E3o")),
-            React.createElement("div", { className: "head-search" },
-                React.createElement("input", { value: q, onChange: e => setQ(e.target.value), placeholder: "Pesquisar" }),
-                React.createElement("button", { className: "circle-plus", onClick: onNew }, "+"))),
-        React.createElement("div", { className: "chips" }, ['Todos', 'CDB', 'LCI/LCA', 'Tesouro'].map(x => React.createElement("button", { key: x, className: filter === x ? 'on' : '', onClick: () => setFilter(x) }, x))),
+            React.createElement("h1", null, "Aplica\u00E7\u00F5es"),
+            React.createElement("div", { className: "head-actions-row" },
+                React.createElement("button", { className: "header-icon", onClick: () => setSearchOpen(s => !s), "aria-label": "Buscar" },
+                    React.createElement(Icon, { name: "search", size: 17 })),
+                React.createElement("button", { className: "circle-plus", onClick: onNew },
+                    React.createElement(Icon, { name: "plus", size: 18 })))),
+        searchOpen && React.createElement("input", { className: "search-input", autoFocus: true, value: q, onChange: e => setQ(e.target.value), placeholder: "Buscar institui\u00E7\u00E3o\u2026" }),
+        React.createElement("div", { className: "chips" }, ['Todas', 'CDB', 'LCI/LCA', 'Tesouro', 'Outros'].map(x => React.createElement("button", { key: x, className: filter === x ? 'on' : '', onClick: () => setFilter(x) }, x))),
         React.createElement("div", { className: "subhead" }, "Por institui\u00E7\u00E3o"),
-        React.createElement("div", { className: "institution-list" }, grupos.map(g => React.createElement("button", { className: "institution-row", key: g.key, onClick: () => setSelected(g.key) },
-            React.createElement("div", { className: "brandless" },
-                React.createElement(InstitutionMark, { nome: g.nome, size: 34 }),
-                React.createElement("div", null,
-                    React.createElement("b", null, nomeInstituicao(g.nome)),
-                    React.createElement("small", null,
-                        g.items.length,
-                        " investimentos \u00B7 ",
-                        fmtPct(g.liquido / (ativos.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0) || 1) * 100),
-                        " da carteira"))),
-            React.createElement("div", null,
-                React.createElement("strong", null, fmtBRL(g.liquido)),
-                React.createElement("small", null,
-                    g.aplicado > 0 ? fmtPct((g.liquido / g.aplicado - 1) * 100) : '—',
-                    " acumulado")),
-            React.createElement("span", null, "\u203A")))));
+        React.createElement("div", { className: "institution-list" }, grupos.map(gr => {
+            const pctCDI = pctCDIGrupo(gr.items, metricsById, refTaxas);
+            return React.createElement("button", { className: "institution-row", key: gr.key, onClick: () => setSelected(gr.key) },
+                React.createElement("div", { className: "brandless" },
+                    React.createElement(InstitutionMark, { nome: gr.nome, size: 42 }),
+                    React.createElement("div", null,
+                        React.createElement("b", null, nomeInstituicao(gr.nome)),
+                        React.createElement("small", null,
+                            gr.items.length,
+                            " investimentos \u00B7 ",
+                            React.createElement("span", { className: "green-txt" }, pctCDI == null ? '\u2014' : fmtPct(pctCDI) + ' CDI')))),
+                React.createElement("div", { className: "inst-row-right" },
+                    React.createElement("strong", null, fmtBRL(gr.liquido)),
+                    React.createElement("small", { className: "muted" },
+                        fmtPct(gr.liquido / totalCarteira * 100),
+                        " da carteira")),
+                React.createElement(Icon, { name: "chevronRight", size: 17, color: "var(--muted)" }));
+        })));
 }
+
 function monthsAgoISO(dateStr, n) {
     const d = new Date(dateStr + 'T00:00:00');
     d.setMonth(d.getMonth() - n);
@@ -1242,7 +1292,7 @@ function ReferenceAccumulatedTable({ ativos, refTaxas, today }) {
             rows.map(r => React.createElement("div", { className: "accum-row", key: r.key },
                 React.createElement("span", { className: "accum-label" }, r.label),
                 React.createElement("strong", { className: r.ret != null && r.cdi != null && r.ret < r.cdi ? 'warn' : 'green-txt' }, r.ret == null ? '\u2014' : fmtPct(r.ret)),
-                React.createElement("span", { className: "accum-badge" + (r.pctCDI != null && r.pctCDI < 100 ? ' below' : '') }, r.pctCDI == null ? '\u2014' : fmtPct(r.pctCDI) + ' CDI')))),
+                React.createElement("span", { className: "accum-cdi" + (r.pctCDI != null && r.pctCDI < 100 ? ' below' : '') }, r.pctCDI == null ? '\u2014' : fmtPct(r.pctCDI) + ' CDI')))),
         destaque ? React.createElement("div", { className: "accum-callout" + (acima ? '' : ' warn-bg') },
             React.createElement(Icon, { name: "info", size: 15 }),
             React.createElement("span", null,
@@ -1253,7 +1303,84 @@ function ReferenceAccumulatedTable({ ativos, refTaxas, today }) {
                 destaque.label.toLowerCase(),
                 ".")) : null);
 }
-function ReferenceAnalysis({ ativos, metricsById, refTaxas, today }) {
+function buildInsights(ativos, metricsById, refTaxas, today) {
+    const insights = [];
+    const totalLiquido = ativos.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0) || 1;
+    const venc30 = ativos.filter(i => metricsById[i.id].diasRestantes != null && metricsById[i.id].diasRestantes >= 0 && metricsById[i.id].diasRestantes <= 30);
+    const valorVenc30 = venc30.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0);
+    if (venc30.length)
+        insights.push({ tipo: 'vencimentos', icon: 'calendar', titulo: 'Vencimentos', valor: fmtBRL(valorVenc30), texto: 'vencem nos pr\u00F3ximos 30 dias.' });
+    const grupos = grupoInstituicoes(ativos, metricsById);
+    if (grupos[0]) {
+        const pct = grupos[0].liquido / totalLiquido * 100;
+        insights.push({ tipo: 'concentracao', icon: 'pieChart', titulo: 'Concentra\u00E7\u00E3o', valor: `${fmtPct(pct)} da carteira`, texto: `est\u00E1 em ${nomeInstituicao(grupos[0].nome)}.`, tag: pct >= 40 ? 'Vale diversificar' : 'N\u00EDvel saud\u00E1vel', tagWarn: pct >= 40 });
+    }
+    const media = pctCDIGrupo(ativos, metricsById, refTaxas);
+    let pior = null, piorPct = null;
+    ativos.forEach(inv => {
+        const m = metricsById[inv.id];
+        if (!m || !(m.valorAtualLiquido > 0))
+            return;
+        const p = percentualCDIEquivalente(inv, refTaxas, Math.max(m.diasCorridos, 1));
+        if (p == null)
+            return;
+        if (piorPct == null || p < piorPct) {
+            piorPct = p;
+            pior = inv;
+        }
+    });
+    if (pior && media != null && piorPct < media)
+        insights.push({ tipo: 'oportunidade', icon: 'trendingUp', titulo: 'Oportunidade', valor: `${pior.tipo} (${fmtPct(piorPct)} CDI)`, texto: `Rende abaixo da m\u00E9dia da sua carteira (${fmtPct(media)} CDI).` });
+    return insights;
+}
+function InsightsList({ ativos, metricsById, refTaxas, today }) {
+    const insights = buildInsights(ativos, metricsById, refTaxas, today);
+    if (!insights.length)
+        return null;
+    return React.createElement(RefCard, null,
+        React.createElement("div", { className: "section-head" },
+            React.createElement("div", { className: "insights-title" },
+                React.createElement(Icon, { name: "trendingUp", size: 18, color: "#F59E0B" }),
+                React.createElement("div", null,
+                    React.createElement("h2", null, "Insights"),
+                    React.createElement("p", null, "Foco no que importa.")))),
+        React.createElement("div", { className: "insight-list" }, insights.map((a, i) => React.createElement("div", { className: "insight", key: i },
+            React.createElement("div", { className: `insight-icon i${i}` },
+                React.createElement(Icon, { name: a.icon, size: 18 })),
+            React.createElement("div", null,
+                React.createElement("b", { className: `insight-title i${i}` }, a.titulo),
+                React.createElement("strong", null, a.valor),
+                React.createElement("span", null, a.texto),
+                a.tag && React.createElement("small", { className: a.tagWarn ? 'warn' : 'green-txt' }, a.tag)),
+            React.createElement(Icon, { name: "chevronRight", size: 16, color: "var(--muted)" })))));
+}
+function ReferenceComposicao({ ativos, metricsById, refTaxas, today }) {
+    const [modo, setModo] = useState('instituicao');
+    const total = ativos.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0) || 1;
+    const palette = ['#2F80ED', '#F59E0B', '#22C55E', '#8B5CF6', '#FF5D73', '#16B7D8', '#E4C441'];
+    let grupos;
+    if (modo === 'instituicao') {
+        grupos = grupoInstituicoes(ativos, metricsById).map(g => ({ key: g.key, nome: nomeInstituicao(g.nome), valor: g.liquido }));
+    }
+    else if (modo === 'tipo') {
+        const map = {};
+        ativos.forEach(inv => { const k = inv.tipo; map[k] = (map[k] || 0) + metricsById[inv.id].valorAtualLiquido; });
+        grupos = Object.entries(map).map(([k, v]) => ({ key: k, nome: k, valor: v }));
+    }
+    else {
+        const map = {};
+        ativos.forEach(inv => { const k = bucketPrazo(metricsById[inv.id].diasRestantes); map[k] = (map[k] || 0) + metricsById[inv.id].valorAtualLiquido; });
+        grupos = Object.entries(map).map(([k, v]) => ({ key: k, nome: k, valor: v }));
+    }
+    grupos = grupos.filter(g => g.valor > 0).sort((a, b) => b.valor - a.valor);
+    const donutItems = grupos.map((g, i) => ({ name: g.nome, value: g.valor, color: palette[i % palette.length] }));
+    return React.createElement(RefCard, null,
+        React.createElement("div", { className: "section-head" },
+            React.createElement("h2", null, "Composi\u00E7\u00E3o")),
+        React.createElement("div", { className: "chips compact" }, [['instituicao', 'Por institui\u00E7\u00E3o'], ['tipo', 'Por tipo'], ['prazo', 'Por prazo']].map(x => React.createElement("button", { key: x[0], className: modo === x[0] ? 'on' : '', onClick: () => setModo(x[0]) }, x[1]))),
+        React.createElement(Donut, { items: donutItems, total: total, centerLabel: fmtBRL(total) }));
+}
+function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, setTab }) {
     const [period, setPeriod] = useState('mes'), [group, setGroup] = useState('tipo');
     const start = periodStart(period, today, ativos);
     const ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = cdiReturnMD(ativos, start, today, refTaxas, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
@@ -1263,31 +1390,32 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today }) {
     const rows = Object.entries(groups).map(([k, items]) => { const a = items.reduce((s, i) => s + i.valorAplicado, 0), l = items.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0), r = a ? ((l / a) - 1) * 100 : 0, rm = items.reduce((s, i) => s + (metricsById[i.id].rentLiquidaMensal || 0) * metricsById[i.id].valorAtualLiquido, 0) / (l || 1); return { k, a, l, r, rm }; }).sort((a, b) => b.l - a.l);
     return React.createElement("div", { className: "screen" },
         React.createElement("div", { className: "page-head" },
-            React.createElement("div", null,
-                React.createElement("h1", null, "An\u00E1lise"),
-                React.createElement("p", null, "Desempenho da carteira, sem vis\u00E3o di\u00E1ria"))),
+            React.createElement("h1", null, "An\u00E1lise")),
         React.createElement("div", { className: "chips wide" }, [['mes', 'Mês'], ['ano', 'Ano'], ['todo', 'Desde o início']].map(x => React.createElement("button", { key: x[0], className: period === x[0] ? 'on' : '', onClick: () => setPeriod(x[0]) }, x[1]))),
-        React.createElement("div", { className: "analysis-hero" },
-            React.createElement("div", null,
-                React.createElement("span", null, "Sua carteira"),
-                React.createElement("strong", null, ret == null ? '—' : fmtPct(ret))),
-            React.createElement("div", null,
-                React.createElement("span", null, "CDI"),
-                React.createElement("strong", null, cdi == null ? '—' : fmtPct(cdi))),
-            React.createElement("div", null,
-                React.createElement("span", null, "Diferen\u00E7a"),
-                React.createElement("strong", { className: diff != null && diff < 0 ? 'warn' : 'green-txt' }, diff == null ? '—' : (diff >= 0 ? '+' : '') + fmtPct(diff))),
-            React.createElement("div", null,
-                React.createElement("span", null, "% do CDI"),
-                React.createElement("strong", null, pct == null ? '—' : fmtPct(pct)))),
+        React.createElement("div", { className: "subhead" }, "Rentabilidade no per\u00EDodo"),
+        React.createElement("div", { className: "two-col stats-row" },
+            React.createElement(RefCard, null,
+                React.createElement("div", { className: "card-title" }, "Sua carteira"),
+                React.createElement("div", { className: "hero-value small" }, ret == null ? '\u2014' : fmtPct(ret)),
+                pct != null && React.createElement("div", { className: `hero-gain ${diff < 0 ? 'warn-txt' : ''}` }, "\u25B2 ", fmtPct(pct), " do CDI")),
+            React.createElement(RefCard, null,
+                React.createElement("div", { className: "card-title" }, "CDI"),
+                React.createElement("div", { className: "hero-value small" }, cdi == null ? '\u2014' : fmtPct(cdi)))),
         React.createElement(RefCard, null,
             React.createElement("div", { className: "section-head" },
                 React.createElement("div", null,
-                    React.createElement("h2", null, "Carteira \u00D7 CDI"),
+                    React.createElement("h2", null, "Sua carteira vs CDI"),
                     React.createElement("p", null,
                         periodLabel(period),
                         " \u00B7 retorno bruto com fluxos tratados como aportes"))),
             React.createElement(PerformanceBars, { ativos: ativos, refTaxas: refTaxas, today: today, period: period })),
+        React.createElement(ReferenceComposicao, { ativos: ativos, metricsById: metricsById, refTaxas: refTaxas, today: today }),
+        React.createElement(RefCard, null,
+            React.createElement("div", { className: "section-head" },
+                React.createElement("div", null,
+                    React.createElement("h2", null, "Desempenho"),
+                    React.createElement("p", null, "Evolu\u00E7\u00E3o do patrim\u00F4nio l\u00EDquido"))),
+            React.createElement(PortfolioLine, { series: evolucao })),
         React.createElement(ReferenceAccumulatedTable, { ativos: ativos, refTaxas: refTaxas, today: today }),
         React.createElement(RefCard, null,
             React.createElement("div", { className: "section-head" },
@@ -1303,7 +1431,8 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today }) {
                 rows.map(r => React.createElement("div", { className: "ct-row", key: r.k },
                     React.createElement("span", null, group === 'instituicao' ? nomeInstituicao(r.k) : r.k),
                     React.createElement("b", null, fmtBRL(r.l)),
-                    React.createElement("strong", { className: "green-txt" }, fmtPct(r.rm)))))));
+                    React.createElement("strong", { className: "green-txt" }, fmtPct(r.rm))))),
+        React.createElement(InsightsList, { ativos: ativos, metricsById: metricsById, refTaxas: refTaxas, today: today })));
 }
 function ReferenceInstitutions({ ativos, metricsById, setTab }) {
     const grupos = grupoInstituicoes(ativos, metricsById), total = grupos.reduce((s, g) => s + g.liquido, 0) || 1;
@@ -1336,32 +1465,48 @@ function ReferenceInstitutions({ ativos, metricsById, setTab }) {
                         React.createElement("strong", null, fmtBRL(g.liquido)),
                         React.createElement("small", null, fmtPct(g.liquido / total * 100)))))))));
 }
-function MoreScreen({ onDados, onNew, setTab }) {
+function MoreScreen({ onDados, onNew, setTab, refTaxas, taxaStatus, onRefresh }) {
     return React.createElement("div", { className: "screen" },
         React.createElement("div", { className: "page-head" },
-            React.createElement("div", null,
-                React.createElement("h1", null, "Mais"),
-                React.createElement("p", null, "Configura\u00E7\u00F5es e controle da carteira"))),
+            React.createElement("h1", null, "Mais")),
         React.createElement(RefCard, { className: "settings-card" },
-            React.createElement("div", { className: "settings-title" }, "Configura\u00E7\u00F5es"),
-            React.createElement("button", { className: "settings-row", onClick: () => setTab('mais') },
-                React.createElement("span", null,
-                    React.createElement("b", null, "Tema"),
-                    React.createElement("small", null, "Interface escura \u00B7 estilo Raz\u00E3o")),
-                React.createElement("span", null, "Autom\u00E1tico \u203A")),
+            React.createElement("div", { className: "settings-title" }, "Geral"),
+            React.createElement("button", { className: "settings-row" },
+                React.createElement("span", null, "Moeda"),
+                React.createElement("span", { className: "settings-val" }, "Real (R$)",
+                    React.createElement(Icon, { name: "chevronRight", size: 15 }))),
+            React.createElement("button", { className: "settings-row" },
+                React.createElement("span", null, "Tema"),
+                React.createElement("span", { className: "settings-val" }, "Autom\u00E1tico",
+                    React.createElement(Icon, { name: "chevronRight", size: 15 }))),
+            React.createElement("button", { className: "settings-row" },
+                React.createElement("span", null, "Notifica\u00E7\u00F5es"),
+                React.createElement("span", { className: "settings-val" }, "Vencimentos",
+                    React.createElement(Icon, { name: "chevronRight", size: 15 })))),
+        React.createElement(RefCard, { className: "settings-card" },
+            React.createElement("div", { className: "settings-title" }, "Taxas de refer\u00EAncia"),
+            React.createElement("button", { className: "settings-row tall", onClick: onRefresh },
+                React.createElement("span", null, "CDI"),
+                React.createElement("div", { className: "settings-val-col" },
+                    React.createElement("span", { className: "settings-val" }, "Autom\u00E1tico (Bacen)",
+                        React.createElement(Icon, { name: "chevronRight", size: 15 })),
+                    React.createElement("small", { className: taxaStatus === 'conectado' ? 'green-txt' : 'muted' }, taxaStatus === 'conectado' ? 'Atualizado diariamente' : taxaStatus === 'carregando' ? 'Atualizando\u2026' : 'Taxa manual \u2014 toque para atualizar')))),
+        React.createElement(RefCard, { className: "settings-card" },
+            React.createElement("div", { className: "settings-title" }, "Dados"),
             React.createElement("button", { className: "settings-row", onClick: onDados },
-                React.createElement("span", null,
-                    React.createElement("b", null, "Dados e backup"),
-                    React.createElement("small", null, "Exportar ou importar sua carteira")),
-                React.createElement("span", null, "\u203A")),
-            React.createElement("button", { className: "settings-row", onClick: onNew },
-                React.createElement("span", null,
-                    React.createElement("b", null, "Novo investimento"),
-                    React.createElement("small", null, "Adicionar CDB, LCI/LCA, Tesouro ou outro")),
-                React.createElement("span", null, "\u203A")),
-            React.createElement("div", { className: "settings-divider" }),
+                React.createElement("span", { className: "settings-icon-label" },
+                    React.createElement("span", { className: "settings-icon blue" }, React.createElement(Icon, { name: "download", size: 15 })),
+                    "Exportar backup"),
+                React.createElement(Icon, { name: "chevronRight", size: 15 })),
+            React.createElement("button", { className: "settings-row", onClick: onDados },
+                React.createElement("span", { className: "settings-icon-label" },
+                    React.createElement("span", { className: "settings-icon blue" }, React.createElement(Icon, { name: "upload", size: 15 })),
+                    "Importar backup"),
+                React.createElement(Icon, { name: "chevronRight", size: 15 }))),
+        React.createElement(RefCard, { className: "settings-card" },
             React.createElement("div", { className: "safe-card" },
-                React.createElement("div", { className: "safe-check" }, "\u2713"),
+                React.createElement("div", { className: "safe-check" },
+                    React.createElement(Icon, { name: "check", size: 15 })),
                 React.createElement("div", null,
                     React.createElement("b", null, "Tudo sob controle"),
                     React.createElement("p", null, "Seus dados ficam armazenados localmente neste dispositivo. O aplicativo n\u00E3o depende de um servidor para guardar sua carteira.")))));
@@ -1446,14 +1591,14 @@ function App() {
         React.createElement("main", null,
             tab === 'painel' && React.createElement(ReferenceDashboard, { ativos: ativos, totais: totais, ganhoLiquido: ganhoLiquido, metricsById: metricsById, refTaxas: ref, today: today, evolucao: evolucao, setTab: setTab, period: period, setPeriod: setPeriod }),
             " ",
-            tab === 'aplicacoes' && React.createElement(ReferenceApplications, { ativos: ativos, metricsById: metricsById, setTab: setTab, onNew: openNew, openEdit: openEdit, deleteInvestment: deleteInvestment }),
+            tab === 'aplicacoes' && React.createElement(ReferenceApplications, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, setTab: setTab, onNew: openNew, openEdit: openEdit, deleteInvestment: deleteInvestment }),
             " ",
-            tab === 'analise' && React.createElement(ReferenceAnalysis, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today }),
+            tab === 'analise' && React.createElement(ReferenceAnalysis, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, evolucao: evolucao, setTab: setTab }),
             " ",
             tab === 'instituicoes' && React.createElement(ReferenceInstitutions, { ativos: ativos, metricsById: metricsById, setTab: setTab }),
             " ",
-            tab === 'mais' && React.createElement(MoreScreen, { onDados: () => { setBackupMsg(''); setShowDados(true); }, onNew: openNew, setTab: setTab })),
-        React.createElement("nav", { className: "bottom-nav" }, [['painel', 'Painel', 'grid'], ['aplicacoes', 'Aplicações', 'wallet'], ['analise', 'Análise', 'listOrdered'], ['mais', 'Mais', 'listChecks']].map(([k, l, ic]) => React.createElement("button", { key: k, className: tab === k ? 'active' : '', onClick: () => setTab(k) },
+            tab === 'mais' && React.createElement(MoreScreen, { onDados: () => { setBackupMsg(''); setShowDados(true); }, onNew: openNew, setTab: setTab, refTaxas: refTaxas, taxaStatus: taxaStatus, onRefresh: refreshTaxas })),
+        React.createElement("nav", { className: "bottom-nav" }, [['painel', 'Painel', 'home'], ['aplicacoes', 'Aplicações', 'bank'], ['analise', 'Análise', 'barChart'], ['mais', 'Mais', 'menu']].map(([k, l, ic]) => React.createElement("button", { key: k, className: tab === k ? 'active' : '', onClick: () => setTab(k) },
             React.createElement(Icon, { name: ic, size: 18 }),
             React.createElement("span", null, l)))),
         showDados && React.createElement(DadosModal, { onClose: () => setShowDados(false), onExport: exportarBackup, onImport: importarBackup, message: backupMsg }),
@@ -1911,7 +2056,7 @@ function DadosModal({ onClose, onExport, onImport, message }) {
             React.createElement("div", { style: { background: C.panel2, borderRadius: 12, padding: 13, marginBottom: 10 } },
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 12 } }, "Exportar"),
                 React.createElement("div", { style: { fontSize: 11, color: C.muted, lineHeight: 1.45, margin: '5px 0 10px' } }, "Cria um arquivo JSON com investimentos, aportes vinculados e taxas salvas. Guarde esse arquivo fora do aparelho."),
-                React.createElement("button", { onClick: onExport, style: { background: C.lime, color: '#10160A', border: 'none', borderRadius: 9, padding: '9px 12px', fontWeight: 800, cursor: 'pointer' } }, "Exportar backup")),
+                React.createElement("button", { onClick: onExport, style: { background: C.blue, color: '#fff', border: 'none', borderRadius: 9, padding: '9px 12px', fontWeight: 800, cursor: 'pointer' } }, "Exportar backup")),
             React.createElement("div", { style: { background: C.panel2, borderRadius: 12, padding: 13 } },
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 12 } }, "Importar"),
                 React.createElement("div", { style: { fontSize: 11, color: C.muted, lineHeight: 1.45, margin: '5px 0 10px' } }, "Importar substitui os dados desta instala\u00E7\u00E3o. Fa\u00E7a um backup antes se j\u00E1 houver aplica\u00E7\u00F5es cadastradas."),
@@ -1920,6 +2065,21 @@ function DadosModal({ onClose, onExport, onImport, message }) {
                 React.createElement("button", { onClick: () => inputRef.current?.click(), style: { background: 'transparent', color: C.text, border: `1px solid ${C.hairline}`, borderRadius: 9, padding: '9px 12px', fontWeight: 750, cursor: 'pointer' } }, "Escolher backup")),
             message && React.createElement("div", { style: { marginTop: 12, fontSize: 11.5, color: C.lime, lineHeight: 1.45 } }, message),
             React.createElement("div", { style: { marginTop: 14, fontSize: 10.5, color: C.muted, lineHeight: 1.45 } }, "O backup \u00E9 local: seus dados n\u00E3o s\u00E3o enviados para o GitHub nem para um servidor.")));
+}
+const TIPO_ICON = {
+    'CDB': { icon: 'coins', color: '#2F80ED' }, 'LCI': { icon: 'leaf', color: '#22C55E' }, 'LCA': { icon: 'leaf', color: '#22C55E' },
+    'CRI': { icon: 'flag', color: '#F59E0B' }, 'CRA': { icon: 'flag', color: '#F59E0B' }, 'Tesouro Direto': { icon: 'flag', color: '#16B7D8' },
+    'Debênture': { icon: 'dots', color: '#8B5CF6' },
+};
+function TipoSelector({ value, onChange }) {
+    return React.createElement("div", { className: "tipo-selector" }, TIPOS.map(t => {
+        const meta = TIPO_ICON[t] || { icon: 'dots', color: C.slate };
+        return React.createElement("button", { type: "button", key: t, className: "tipo-row" + (value === t ? ' sel' : ''), onClick: () => onChange(t) },
+            React.createElement("span", { className: "tipo-icon", style: { background: meta.color + '22', color: meta.color } },
+                React.createElement(Icon, { name: meta.icon, size: 16 })),
+            React.createElement("span", { className: "tipo-label" }, t),
+            React.createElement("span", { className: "tipo-pill" }, t === 'Tesouro Direto' ? 'Tesouro' : t));
+    }));
 }
 function FormModal({ form, setForm, editingId, formError, refTaxas, investments, onClose, onSave, onTipoChange }) {
     const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -1942,6 +2102,12 @@ function FormModal({ form, setForm, editingId, formError, refTaxas, investments,
                     React.createElement("div", { style: { fontSize: 11, color: C.muted, marginTop: 3 } }, "Preencha s\u00F3 o que \u00E9 necess\u00E1rio; os detalhes avan\u00E7ados ficam abaixo.")),
                 React.createElement("button", { onClick: onClose, style: { background: 'none', border: 'none', color: C.muted, cursor: 'pointer' } },
                     React.createElement(Icon, { name: "x", size: 19 }))),
+            React.createElement("div", { className: "step-indicator" },
+                [['1', 'Tipo'], ['2', 'Detalhes'], ['3', 'Confirma\u00E7\u00E3o']].map(([n, l], i) => React.createElement(React.Fragment, { key: n },
+                    i > 0 && React.createElement("div", { className: "step-line" }),
+                    React.createElement("div", { className: "step-dot" + (i === 0 ? ' active' : '') },
+                        React.createElement("span", { className: "step-num" }, n),
+                        React.createElement("span", { className: "step-label" }, l))))),
             React.createElement("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 13 } },
                 React.createElement(Field, { label: "Institui\u00E7\u00E3o / emissor" },
                     React.createElement("select", { style: inputStyle, value: bancoExistente ? form.instituicao : '__novo__', onChange: selecionarBanco },
@@ -1958,7 +2124,7 @@ function FormModal({ form, setForm, editingId, formError, refTaxas, investments,
                             " \u00B7 ",
                             descricaoTaxa(inv, refTaxas))))),
                 React.createElement(Field, { label: "Tipo" },
-                    React.createElement("select", { style: inputStyle, value: form.tipo, onChange: e => onTipoChange(e.target.value) }, TIPOS.map(t => React.createElement("option", { key: t }, t)))),
+                    React.createElement(TipoSelector, { value: form.tipo, onChange: onTipoChange })),
                 React.createElement(Field, { label: "Indexador" },
                     React.createElement("select", { style: inputStyle, value: form.indexador, onChange: set('indexador') }, INDEXADORES.map(t => React.createElement("option", { key: t }, t)))),
                 React.createElement(Field, { label: parametroLabel(form.indexador), hint: tesouro ? `Taxa contratada: ${fmtPct(efetiva)} a.a. · mercado pode variar` : `taxa efetiva: ${fmtPct(efetiva)} a.a.` },
@@ -2007,6 +2173,6 @@ function FormModal({ form, setForm, editingId, formError, refTaxas, investments,
             formError && React.createElement("p", { style: { color: C.red, fontSize: 12.5, marginTop: 12 } }, formError),
             React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 } },
                 React.createElement("button", { onClick: onClose, style: { background: 'none', border: `1px solid ${C.hairline}`, color: C.muted, borderRadius: 9, padding: '9px 14px', cursor: 'pointer' } }, "Cancelar"),
-                React.createElement("button", { onClick: onSave, style: { background: C.lime, border: 'none', color: '#10160A', borderRadius: 9, padding: '9px 16px', cursor: 'pointer', fontWeight: 750 } }, editingId ? 'Salvar' : 'Adicionar'))));
+                React.createElement("button", { onClick: onSave, style: { background: C.blue, border: 'none', color: '#fff', borderRadius: 9, padding: '9px 16px', cursor: 'pointer', fontWeight: 750 } }, editingId ? 'Salvar' : 'Adicionar'))));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App, null));
