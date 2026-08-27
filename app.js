@@ -174,6 +174,27 @@ function grupoInstituicoes(ativos, metricsById) {
         map[key] = { key, nome: inv.instituicao, items: [], bruto: 0, liquido: 0, aplicado: 0 }; const g = map[key], m = metricsById[inv.id]; g.items.push(inv); g.bruto += m.valorAtualBruto; g.liquido += m.valorAtualLiquido; g.aplicado += inv.valorAplicado; });
     return Object.values(map).map(g => ({ ...g, ganho: g.liquido - g.aplicado, rent: g.aplicado ? (g.liquido / g.aplicado - 1) * 100 : 0 })).sort((a, b) => b.liquido - a.liquido);
 }
+// Duas aplicações são a "mesma posição" quando têm a mesma instituição, tipo,
+// indexador, taxa contratada, vencimento e liquidez — exatamente como bancos e
+// plataformas (Gorila, XP, etc.) consolidam extratos de um mesmo título/CDB
+// comprado em datas diferentes.
+function chavePosicao(inv) {
+    return [normalizarInstituicao(inv.instituicao), inv.tipo, inv.indexador, Number(inv.parametroValor) || 0, inv.dataVencimento, inv.liquidez || '', inv.isentoIR ? 1 : 0].join('|');
+}
+function agruparPosicoes(items, metricsById) {
+    const map = {};
+    items.forEach(inv => {
+        const k = chavePosicao(inv), m = metricsById[inv.id];
+        if (!map[k])
+            map[k] = { key: k, tipo: inv.tipo, indexador: inv.indexador, parametroValor: inv.parametroValor, dataVencimento: inv.dataVencimento, liquidez: inv.liquidez, isentoIR: inv.isentoIR, instituicao: inv.instituicao, valorAplicado: 0, valorAtualBruto: 0, valorAtualLiquido: 0, diasRestantes: m.diasRestantes, lots: [] };
+        const g = map[k];
+        g.valorAplicado += Number(inv.valorAplicado) || 0;
+        g.valorAtualBruto += m.valorAtualBruto || 0;
+        g.valorAtualLiquido += m.valorAtualLiquido || 0;
+        g.lots.push(inv);
+    });
+    return Object.values(map).map(g => ({ ...g, ganhoLiquido: g.valorAtualLiquido - g.valorAplicado, rentLiquidaTotal: g.valorAplicado ? (g.valorAtualLiquido / g.valorAplicado - 1) * 100 : 0 })).sort((a, b) => b.valorAtualLiquido - a.valorAtualLiquido);
+}
 /* ------------------------------------------------------------------ */
 /* Ícones (SVG próprios — evita depender de mais um pacote externo)    */
 /* ------------------------------------------------------------------ */
@@ -581,17 +602,22 @@ function calcMetrics(inv, today, ref) {
 function buildEvolutionSeries(list, metricsById, today) {
     const events = [];
     list.forEach(inv => {
-        events.push({ date: inv.dataAplicacao, id: inv.id, valor: inv.valorAplicado });
+        events.push({ date: inv.dataAplicacao, id: inv.id, valor: inv.valorAplicado, aplicado: inv.valorAplicado });
         (inv.historico || []).forEach(h => events.push({ date: h.data, id: inv.id, valor: h.valorBruto }));
         if (metricsById && metricsById[inv.id])
             events.push({ date: today, id: inv.id, valor: metricsById[inv.id].valorAtualBruto });
     });
     const dates = [...new Set(events.map(e => e.date))].sort();
-    const last = {};
+    const last = {}, aplicadoPorId = {};
     return dates.map(date => {
-        events.filter(e => e.date === date).forEach(e => { last[e.id] = e.valor; });
+        events.filter(e => e.date === date).forEach(e => {
+            last[e.id] = e.valor;
+            if (e.aplicado != null)
+                aplicadoPorId[e.id] = e.aplicado;
+        });
         const total = Object.values(last).reduce((a, b) => a + b, 0);
-        return { date: fmtData(date), total };
+        const aplicado = Object.values(aplicadoPorId).reduce((a, b) => a + b, 0);
+        return { date: fmtData(date), total, aplicado };
     });
 }
 function valorProjetadoEm(inv, dataAlvo, ref, today) {
@@ -927,7 +953,31 @@ function periodReturnMD(ativos, inicio, fim, ref, today, metricsById) {
     const den = V0 + weightedCF;
     return den > 0 ? ((V1 - V0 - CF) / den) * 100 : null;
 }
-// Benchmark de CDI comparável ao retorno da carteira (Modified Dietz).
+// Ganho financeiro em R$ no período (mesma lógica de fluxos do Modified Dietz,
+// mas sem dividir pela base ponderada) — equivalente ao "Resultado Financeiro"
+// que relatórios de carteira (Gorila, corretoras) mostram por janela de tempo.
+function periodGainBRL(ativos, inicio, fim, ref, today) {
+    if (!inicio || !fim || inicio >= fim)
+        return null;
+    let V0 = 0, V1 = 0, CF = 0;
+    ativos.forEach(inv => {
+        if (inv.dataAplicacao > fim)
+            return;
+        const vf = valorProjetadoEm(inv, fim, ref, today);
+        if (!(vf > 0))
+            return;
+        V1 += vf;
+        if (inv.dataAplicacao < inicio) {
+            const vi = valorProjetadoEm(inv, inicio, ref, today);
+            if (vi > 0)
+                V0 += vi;
+        }
+        else {
+            CF += Number(inv.valorAplicado) || 0;
+        }
+    });
+    return V1 - V0 - CF;
+}
 // Simula uma carteira hipotética que recebeu exatamente os mesmos aportes,
 // nas mesmas datas, rendendo 100% do CDI — assim a comparação "carteira x CDI"
 // não fica distorcida por aportes recentes (sem isso, um aporte novo faz o CDI
@@ -965,6 +1015,21 @@ function cdiReturnMD(ativos, inicio, fim, ref, today) {
     });
     const den = V0 + weightedCF;
     return den > 0 ? ((V1 - V0 - CF) / den) * 100 : null;
+}
+// Aproximação da inflação (IPCA) no período: como só temos a taxa acumulada
+// dos últimos 12 meses (não uma série histórica diária), compomos essa taxa
+// proporcionalmente aos dias corridos do período — suficiente para estimar a
+// "rentabilidade real" (acima da inflação), como fazem relatórios de carteira.
+function ipcaReturnApprox(inicio, fim, ref) {
+    if (!inicio || !fim || inicio >= fim || !(ref.ipca > 0))
+        return null;
+    const dias = Math.max(diffDays(inicio, fim), 0);
+    return (Math.pow(1 + ref.ipca / 100, dias / 365) - 1) * 100;
+}
+function rentabilidadeReal(retLiquido, ipca) {
+    if (retLiquido == null || ipca == null)
+        return null;
+    return ((1 + retLiquido / 100) / (1 + ipca / 100) - 1) * 100;
 }
 function periodLabel(period) { return period === 'mes' ? 'Mês' : period === 'ano' ? 'Ano' : 'Todo o período'; }
 function periodStart(period, today, ativos) {
@@ -1014,13 +1079,17 @@ function fmtBRLk(v) {
         return 'R$ ' + Math.round(n / 1000) + 'k';
     return fmtBRL(n);
 }
-function PortfolioLine({ series }) {
+function PortfolioLine({ series, showInvested = false }) {
     if (!series || series.length < 2)
         return React.createElement("div", { className: "empty-chart" }, "Cadastre posi\u00E7\u00F5es em datas diferentes para visualizar a evolu\u00E7\u00E3o.");
-    const vals = series.map(x => x.total), min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1, W = 700, H = 220, p = 12;
-    const pts = vals.map((v, i) => [p + i / (vals.length - 1) * (W - p * 2), H - p - (v - min) / range * (H - p * 2)]);
-    const path = pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+    const vals = series.map(x => x.total), aplic = series.map(x => x.aplicado ?? 0);
+    const allVals = showInvested ? vals.concat(aplic) : vals;
+    const min = Math.min(...allVals), max = Math.max(...allVals), range = max - min || 1, W = 700, H = 220, p = 12;
+    const toPts = (arr) => arr.map((v, i) => [p + i / (arr.length - 1) * (W - p * 2), H - p - (v - min) / range * (H - p * 2)]);
+    const toPath = (pts) => pts.map((q, i) => (i ? 'L' : 'M') + q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+    const pts = toPts(vals), path = toPath(pts);
     const area = path + ` L${W - p},${H - p} L${p},${H - p} Z`;
+    const ptsAplic = showInvested ? toPts(aplic) : null, pathAplic = ptsAplic ? toPath(ptsAplic) : null;
     const gridVals = [max, min + (max - min) * 0.66, min + (max - min) * 0.33, min];
     const gridYs = gridVals.map(v => H - p - (v - min) / range * (H - p * 2));
     return React.createElement("div", { className: "chart-box" },
@@ -1036,32 +1105,47 @@ function PortfolioLine({ series }) {
                         React.createElement("stop", { offset: "1", stopColor: "#22C55E", stopOpacity: "0" }))),
                 gridYs.map((y, i) => React.createElement("line", { key: i, x1: p, x2: W - p, y1: y, y2: y, stroke: "rgba(255,255,255,0.06)", strokeWidth: "1" })),
                 React.createElement("path", { d: area, fill: "url(#rfArea)" }),
+                pathAplic && React.createElement("path", { d: pathAplic, fill: "none", stroke: "#5B9DF0", strokeWidth: "2", strokeDasharray: "5 4", vectorEffect: "non-scaling-stroke" }),
                 React.createElement("path", { d: path, fill: "none", stroke: "#22C55E", strokeWidth: "3", vectorEffect: "non-scaling-stroke" }),
                 React.createElement("circle", { cx: pts.at(-1)[0], cy: pts.at(-1)[1], r: "4", fill: "#22C55E" }))),
         React.createElement("div", { className: "chart-axis" },
             React.createElement("span", null, series[0].date),
             React.createElement("span", null, series[Math.floor(series.length / 2)].date),
-            React.createElement("span", null, series.at(-1).date)));
+            React.createElement("span", null, series.at(-1).date)),
+        showInvested && React.createElement("div", { className: "bar-legend" },
+            React.createElement("span", null,
+                React.createElement("i", { className: "dot green" }),
+                " Patrim\u00F4nio"),
+            React.createElement("span", null,
+                React.createElement("i", { className: "dot blue" }),
+                " Valor investido")));
 }
 function PerformanceBars({ ativos, refTaxas, today, period }) {
     const months = [];
     const end = new Date(today + 'T00:00:00');
-    for (let i = 5; i >= 0; i--) {
+    const inicioCarteira = periodStart('todo', today, ativos);
+    const mesesDesdeInicio = Math.max(1, Math.round(diffDays(inicioCarteira, today) / 30));
+    const n = period === 'ano' ? end.getMonth() + 1 : period === 'todo' ? Math.min(24, mesesDesdeInicio) : 6;
+    for (let i = n - 1; i >= 0; i--) {
         const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
         const ini = d.toISOString().slice(0, 10);
         const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
         const fim = last > end ? today : last.toISOString().slice(0, 10);
         const r = periodReturnMD(ativos, ini, fim, refTaxas, today, {});
         const c = cdiReturnMD(ativos, ini, fim, refTaxas, today);
-        months.push({ label: MESES_ABREV[d.getMonth()], r: r ?? 0, c: c ?? 0 });
+        months.push({ label: MESES_ABREV[d.getMonth()], ano: d.getFullYear(), r: r ?? 0, c: c ?? 0, temDado: r != null });
     }
-    const max = Math.max(0.1, ...months.flatMap(x => [x.r, x.c]));
+    const visiveis = months.filter(m => m.temDado);
+    const max = Math.max(0.1, ...visiveis.flatMap(x => [x.r, x.c]));
+    const showYear = n > 12;
     return React.createElement("div", { className: "bars-chart" },
-        React.createElement("div", { className: "bars-grid" }, months.map((m, i) => React.createElement("div", { className: "bar-group", key: i },
-            React.createElement("div", { className: "bar-pair" },
-                React.createElement("span", { className: "bar green", style: { height: `${Math.max(3, (m.r / max) * 118)}px` }, title: `Carteira ${fmtPct(m.r)}` }),
-                React.createElement("span", { className: "bar blue", style: { height: `${Math.max(3, (m.c / max) * 118)}px` }, title: `CDI ${fmtPct(m.c)}` })),
-            React.createElement("small", null, m.label)))),
+        React.createElement("div", { className: "bars-scroll" },
+            React.createElement("div", { className: "bars-grid", style: { minWidth: Math.max(300, months.length * 40) } }, months.map((m, i) => React.createElement("div", { className: "bar-group", key: i },
+                React.createElement("small", { className: "bar-value" }, m.temDado ? fmtPct(m.r) : ''),
+                React.createElement("div", { className: "bar-pair" },
+                    React.createElement("span", { className: "bar green", style: { height: `${Math.max(3, (m.r / max) * 118)}px` }, title: `Carteira ${fmtPct(m.r)}` }),
+                    React.createElement("span", { className: "bar blue", style: { height: `${Math.max(3, (m.c / max) * 118)}px` }, title: `CDI ${fmtPct(m.c)}` })),
+                React.createElement("small", null, m.label, showYear ? "/" + String(m.ano).slice(2) : ''))))),
         React.createElement("div", { className: "bar-legend" },
             React.createElement("span", null,
                 React.createElement("i", { className: "dot green" }),
@@ -1108,7 +1192,8 @@ function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxa
                         React.createElement("span", null,
                             "\u25B2 ",
                             fmtPct(totais.aplicado > 0 ? ganhoLiquido / totais.aplicado * 100 : 0))),
-                    React.createElement("div", { className: "hero-note" }, "Ganho l\u00EDquido (desde o in\u00EDcio)")),
+                    React.createElement("div", { className: "hero-note" }, "Ganho l\u00EDquido (desde o in\u00EDcio)"),
+                    React.createElement("div", { className: "hero-note" }, "Patrim\u00F4nio bruto: ", React.createElement("b", null, fmtBRL(totais.bruto)))),
                 React.createElement("div", { className: "hero-spark" },
                     React.createElement(PortfolioLine, { series: evolucao })))),
         React.createElement("div", { className: "two-col stats-row" },
@@ -1131,7 +1216,8 @@ function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxa
                         React.createElement("span", null, "institui\u00E7\u00F5es")),
                     React.createElement("div", null,
                         React.createElement("strong", null, ativos.length),
-                        React.createElement("span", null, "investimentos")))),
+                        React.createElement("span", null, "investimentos"))),
+                React.createElement("div", { className: "hero-note" }, "IR + IOF a pagar (estimado): ", React.createElement("b", { className: "warn" }, fmtBRL(Math.max(totais.bruto - totais.liquido, 0))))),
             React.createElement(RefCard, { className: "clickable atencao-card", onClick: () => setTab('aplicacoes') },
                 React.createElement("div", { className: "card-title" }, "Aten\u00E7\u00E3o"),
                 React.createElement("div", { className: "atencao-row" },
@@ -1142,11 +1228,12 @@ function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxa
                         React.createElement("span", null, "vencimentos em at\u00E9 60 dias"))))));
 }
 function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, onNew, openEdit, deleteInvestment }) {
-    const [filter, setFilter] = useState('Todas'), [q, setQ] = useState(''), [searchOpen, setSearchOpen] = useState(false), [selected, setSelected] = useState(null), [selectedInv, setSelectedInv] = useState(null);
+    const [filter, setFilter] = useState('Todas'), [q, setQ] = useState(''), [searchOpen, setSearchOpen] = useState(false), [selected, setSelected] = useState(null), [selectedPos, setSelectedPos] = useState(null), [selectedInv, setSelectedInv] = useState(null);
     const passaFiltro = (g) => filter === 'Todas' || (filter === 'CDB' && g.items.some(i => i.tipo === 'CDB')) || (filter === 'LCI/LCA' && g.items.some(i => ['LCI', 'LCA'].includes(i.tipo))) || (filter === 'Tesouro' && g.items.some(i => i.tipo === 'Tesouro Direto')) || (filter === 'Outros' && g.items.some(i => !['CDB', 'LCI', 'LCA', 'Tesouro Direto'].includes(i.tipo)));
     const grupos = grupoInstituicoes(ativos, metricsById).filter(g => passaFiltro(g) && nomeInstituicao(g.nome).toLowerCase().includes(q.toLowerCase()));
     const totalCarteira = ativos.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0) || 1;
     const g = selected ? grupos.find(x => x.key === selected) || grupoInstituicoes(ativos, metricsById).find(x => x.key === selected) : null;
+    const backToList = () => { setSelected(null); setSelectedPos(null); setSelectedInv(null); };
     if (g && selectedInv) {
         const inv = g.items.find(x => x.id === selectedInv), m = inv ? metricsById[inv.id] : null;
         if (!inv)
@@ -1154,7 +1241,7 @@ function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, o
         return React.createElement("div", { className: "screen" },
             React.createElement("button", { className: "back-btn", onClick: () => setSelectedInv(null) },
                 "\u2039 ",
-                nomeInstituicao(g.nome)),
+                selectedPos ? "posi\u00E7\u00E3o" : nomeInstituicao(g.nome)),
             React.createElement(RefCard, { className: "detail-hero" },
                 React.createElement("div", null,
                     React.createElement("span", { className: "type-pill green" }, inv.tipo),
@@ -1166,8 +1253,17 @@ function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, o
                 React.createElement(InstitutionMark, { nome: inv.instituicao, size: 40 })),
             React.createElement(RefCard, { className: "detail-rows" },
                 React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor aplicado"),
+                    React.createElement("strong", null, fmtBRL(inv.valorAplicado))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor bruto atual"),
+                    React.createElement("strong", null, fmtBRL(m.valorAtualBruto))),
+                React.createElement("div", { className: "detail-row" },
                     React.createElement("span", null, "Valor l\u00EDquido atual"),
                     React.createElement("strong", null, fmtBRL(m.valorAtualLiquido))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "IR + IOF estimados"),
+                    React.createElement("strong", { className: "warn" }, fmtBRL(m.irValor + m.iofValor))),
                 React.createElement("div", { className: "detail-row" },
                     React.createElement("span", null, "Rentabilidade"),
                     React.createElement("strong", null, taxaCurta(inv))),
@@ -1190,10 +1286,69 @@ function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, o
                 React.createElement("button", { className: "text-btn", onClick: () => openEdit(inv) }, "Editar"),
                 React.createElement("button", { className: "text-btn warn", onClick: () => deleteInvestment(inv.id) }, "Excluir")));
     }
+    if (g && selectedPos) {
+        const posicoes = agruparPosicoes(g.items, metricsById);
+        const pos = posicoes.find(p => p.key === selectedPos);
+        if (!pos)
+            return null;
+        return React.createElement("div", { className: "screen" },
+            React.createElement("button", { className: "back-btn", onClick: () => setSelectedPos(null) },
+                "\u2039 ",
+                nomeInstituicao(g.nome)),
+            React.createElement(RefCard, { className: "detail-hero" },
+                React.createElement("div", null,
+                    React.createElement("span", { className: "type-pill green" }, pos.tipo),
+                    React.createElement("h1", null, tituloInvestimento(pos)),
+                    React.createElement("p", null,
+                        pos.lots.length,
+                        " aportes consolidados nesta posi\u00E7\u00E3o")),
+                React.createElement(InstitutionMark, { nome: pos.instituicao, size: 40 })),
+            React.createElement(RefCard, { className: "detail-rows" },
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor aplicado (total)"),
+                    React.createElement("strong", null, fmtBRL(pos.valorAplicado))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor bruto atual"),
+                    React.createElement("strong", null, fmtBRL(pos.valorAtualBruto))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor l\u00EDquido atual"),
+                    React.createElement("strong", null, fmtBRL(pos.valorAtualLiquido))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Rentabilidade"),
+                    React.createElement("strong", null, taxaCurta(pos))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Vencimento"),
+                    React.createElement("strong", null, fmtData(pos.dataVencimento))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Ganho l\u00EDquido (total)"),
+                    React.createElement("strong", { className: "green-txt" },
+                        fmtBRL(pos.ganhoLiquido),
+                        " \u25B2 ",
+                        fmtPct(pos.rentLiquidaTotal))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Liquidez"),
+                    React.createElement("strong", null, pos.liquidez))),
+            React.createElement("div", { className: "section-head" },
+                React.createElement("h2", null, "Aportes desta posi\u00E7\u00E3o")),
+            React.createElement("div", { className: "detail-list" }, pos.lots.slice().sort((a, b) => a.dataAplicacao.localeCompare(b.dataAplicacao)).map(inv => {
+                const m = metricsById[inv.id];
+                return React.createElement(RefCard, { key: inv.id, className: "investment-card" },
+                    React.createElement("button", { className: "investment-hit", onClick: () => setSelectedInv(inv.id) },
+                        React.createElement("div", { className: "inv-top" },
+                            React.createElement("h3", null,
+                                "Aporte de ",
+                                fmtData(inv.dataAplicacao)),
+                            React.createElement(Icon, { name: "chevronRight", size: 15, color: "var(--muted)" })),
+                        React.createElement("div", { className: "inv-mid" },
+                            React.createElement("strong", { className: "green-txt" }, fmtBRL(m.valorAtualLiquido)),
+                            React.createElement("span", { className: "inv-venc" }, "aplicado: ", fmtBRL(inv.valorAplicado)))));
+            })));
+    }
     if (g) {
         const pctCDI = pctCDIGrupo(g.items, metricsById, refTaxas);
+        const posicoes = agruparPosicoes(g.items, metricsById);
         return React.createElement("div", { className: "screen" },
-            React.createElement("button", { className: "back-btn", onClick: () => setSelected(null) }, "\u2039 Aplica\u00E7\u00F5es"),
+            React.createElement("button", { className: "back-btn", onClick: backToList }, "\u2039 Aplica\u00E7\u00F5es"),
             React.createElement(RefCard, { className: "institution-hero" },
                 React.createElement("div", { className: "inst-head-left" },
                     React.createElement(InstitutionMark, { nome: g.nome, size: 48 }),
@@ -1205,26 +1360,35 @@ function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, o
                 React.createElement("div", { className: "inst-total" },
                     React.createElement("span", null, "Total l\u00EDquido"),
                     React.createElement("strong", null, fmtBRL(g.liquido)),
+                    React.createElement("small", { className: "muted" }, "Bruto: ", fmtBRL(g.bruto)),
                     pctCDI != null && React.createElement("small", { className: "green-txt" }, fmtPct(pctCDI), " do CDI"))),
             pctCDI != null && React.createElement("div", { className: "cdi-bar" },
                 React.createElement("div", { style: { width: Math.min(100, Math.max(4, pctCDI)) + '%' } })),
             React.createElement("div", { className: "section-head" },
-                React.createElement("h2", null, "Investimentos")),
-            React.createElement("div", { className: "detail-list" }, g.items.map(inv => {
-                const m = metricsById[inv.id];
-                const card = React.createElement("button", { className: "investment-hit", onClick: () => setSelectedInv(inv.id) },
+                React.createElement("h2", null, "Investimentos"),
+                posicoes.length !== g.items.length && React.createElement("p", null,
+                    g.items.length,
+                    " aportes agrupados em ",
+                    posicoes.length,
+                    " posi\u00E7\u00F5es")),
+            React.createElement("div", { className: "detail-list" }, posicoes.map(pos => {
+                const card = React.createElement("button", { className: "investment-hit", onClick: () => pos.lots.length > 1 ? setSelectedPos(pos.key) : setSelectedInv(pos.lots[0].id) },
                     React.createElement("div", { className: "inv-top" },
-                        React.createElement("h3", null, tituloInvestimento(inv)),
-                        React.createElement("span", { className: "type-pill" }, inv.tipo)),
+                        React.createElement("h3", null, tituloInvestimento(pos)),
+                        React.createElement("span", { className: "type-pill" }, pos.tipo)),
                     React.createElement("div", { className: "inv-mid" },
-                        React.createElement("strong", { className: "green-txt" }, fmtBRL(m.valorAtualLiquido)),
+                        React.createElement("strong", { className: "green-txt" }, fmtBRL(pos.valorAtualLiquido)),
                         React.createElement("span", { className: "inv-venc" },
                             React.createElement("i", { className: "dot green" }),
-                            m.diasRestantes >= 0 ? `Vence em ${fmtData(inv.dataVencimento)}` : 'Vencido')),
+                            pos.diasRestantes >= 0 ? `Vence em ${fmtData(pos.dataVencimento)}` : 'Vencido')),
                     React.createElement("div", { className: "inv-rate" },
                         React.createElement("i", { className: "dot green" }),
-                        taxaCurta(inv)));
-                return React.createElement(RefCard, { key: inv.id, className: "investment-card" }, card);
+                        "Bruto: ",
+                        fmtBRL(pos.valorAtualBruto),
+                        pos.lots.length > 1 && React.createElement("span", { className: "lots-badge" },
+                            pos.lots.length,
+                            " aportes")));
+                return React.createElement(RefCard, { key: pos.key, className: "investment-card" }, card);
             })));
     }
     return React.createElement("div", { className: "screen" },
@@ -1251,6 +1415,7 @@ function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, o
                             React.createElement("span", { className: "green-txt" }, pctCDI == null ? '\u2014' : fmtPct(pctCDI) + ' CDI')))),
                 React.createElement("div", { className: "inst-row-right" },
                     React.createElement("strong", null, fmtBRL(gr.liquido)),
+                    React.createElement("small", { className: "muted" }, "bruto: ", fmtBRL(gr.bruto)),
                     React.createElement("small", { className: "muted" },
                         fmtPct(gr.liquido / totalCarteira * 100),
                         " da carteira")),
@@ -1274,8 +1439,10 @@ function rentabilidadeAcumuladaPeriods(ativos, refTaxas, today) {
     return defs.map(([key, label, start]) => {
         const ret = periodReturnMD(ativos, start, today, refTaxas, today, {});
         const cdi = cdiReturnMD(ativos, start, today, refTaxas, today);
+        const ipca = ipcaReturnApprox(start, today, refTaxas);
+        const ganhoBRL = periodGainBRL(ativos, start, today, refTaxas, today);
         const pctCDI = ret != null && cdi > 0 ? (ret / cdi) * 100 : null;
-        return { key, label, ret, cdi, pctCDI };
+        return { key, label, ret, cdi, ipca, ganhoBRL, pctCDI };
     });
 }
 function ReferenceAccumulatedTable({ ativos, refTaxas, today }) {
@@ -1287,12 +1454,16 @@ function ReferenceAccumulatedTable({ ativos, refTaxas, today }) {
         React.createElement("div", { className: "section-head" },
             React.createElement("div", null,
                 React.createElement("h2", null, "Rentabilidade acumulada"),
-                React.createElement("p", null, "Retorno l\u00EDquido da carteira x CDI por janela de tempo"))),
+                React.createElement("p", null, "Resultado financeiro e comparativo por janela de tempo"))),
         React.createElement("div", { className: "accum-table" },
-            rows.map(r => React.createElement("div", { className: "accum-row", key: r.key },
-                React.createElement("span", { className: "accum-label" }, r.label),
-                React.createElement("strong", { className: r.ret != null && r.cdi != null && r.ret < r.cdi ? 'warn' : 'green-txt' }, r.ret == null ? '\u2014' : fmtPct(r.ret)),
-                React.createElement("span", { className: "accum-cdi" + (r.pctCDI != null && r.pctCDI < 100 ? ' below' : '') }, r.pctCDI == null ? '\u2014' : fmtPct(r.pctCDI) + ' CDI')))),
+            rows.map(r => React.createElement("div", { className: "accum-row2", key: r.key },
+                React.createElement("div", { className: "accum-row2-top" },
+                    React.createElement("span", { className: "accum-label" }, r.label),
+                    React.createElement("strong", { className: r.ganhoBRL != null && r.ganhoBRL < 0 ? 'warn' : 'green-txt' }, r.ganhoBRL == null ? '\u2014' : fmtBRL(r.ganhoBRL))),
+                React.createElement("div", { className: "accum-row2-bottom" },
+                    React.createElement("span", { className: r.ret != null && r.cdi != null && r.ret < r.cdi ? 'warn' : 'green-txt' }, r.ret == null ? '\u2014' : fmtPct(r.ret)),
+                    React.createElement("span", { className: "accum-cdi" + (r.pctCDI != null && r.pctCDI < 100 ? ' below' : '') }, r.pctCDI == null ? '\u2014' : fmtPct(r.pctCDI) + ' CDI'),
+                    React.createElement("span", { className: "muted" }, "IPCA ", r.ipca == null ? '\u2014' : fmtPct(r.ipca)))))),
         destaque ? React.createElement("div", { className: "accum-callout" + (acima ? '' : ' warn-bg') },
             React.createElement(Icon, { name: "info", size: 15 }),
             React.createElement("span", null,
@@ -1333,6 +1504,7 @@ function buildInsights(ativos, metricsById, refTaxas, today) {
         insights.push({ tipo: 'oportunidade', icon: 'trendingUp', titulo: 'Oportunidade', valor: `${pior.tipo} (${fmtPct(piorPct)} CDI)`, texto: `Rende abaixo da m\u00E9dia da sua carteira (${fmtPct(media)} CDI).` });
     return insights;
 }
+const INSIGHT_STYLE = { vencimentos: 'i0', concentracao: 'i1', oportunidade: 'i2' };
 function InsightsList({ ativos, metricsById, refTaxas, today }) {
     const insights = buildInsights(ativos, metricsById, refTaxas, today);
     if (!insights.length)
@@ -1344,15 +1516,15 @@ function InsightsList({ ativos, metricsById, refTaxas, today }) {
                 React.createElement("div", null,
                     React.createElement("h2", null, "Insights"),
                     React.createElement("p", null, "Foco no que importa.")))),
-        React.createElement("div", { className: "insight-list" }, insights.map((a, i) => React.createElement("div", { className: "insight", key: i },
-            React.createElement("div", { className: `insight-icon i${i}` },
+        React.createElement("div", { className: "insight-list" }, insights.map((a, i) => { const cls = INSIGHT_STYLE[a.tipo] || 'i0'; return React.createElement("div", { className: "insight", key: i },
+            React.createElement("div", { className: `insight-icon ${cls}` },
                 React.createElement(Icon, { name: a.icon, size: 18 })),
             React.createElement("div", null,
-                React.createElement("b", { className: `insight-title i${i}` }, a.titulo),
+                React.createElement("b", { className: `insight-title ${cls}` }, a.titulo),
                 React.createElement("strong", null, a.valor),
                 React.createElement("span", null, a.texto),
                 a.tag && React.createElement("small", { className: a.tagWarn ? 'warn' : 'green-txt' }, a.tag)),
-            React.createElement(Icon, { name: "chevronRight", size: 16, color: "var(--muted)" })))));
+            React.createElement(Icon, { name: "chevronRight", size: 16, color: "var(--muted)" })); })));
 }
 function ReferenceComposicao({ ativos, metricsById, refTaxas, today }) {
     const [modo, setModo] = useState('instituicao');
@@ -1384,6 +1556,7 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, set
     const [period, setPeriod] = useState('mes'), [group, setGroup] = useState('tipo');
     const start = periodStart(period, today, ativos);
     const ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = cdiReturnMD(ativos, start, today, refTaxas, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
+    const ipca = ipcaReturnApprox(start, today, refTaxas), real = rentabilidadeReal(ret, ipca);
     const groups = {};
     ativos.forEach(inv => { const key = group === 'tipo' ? inv.tipo : normalizarInstituicao(inv.instituicao); if (!groups[key])
         groups[key] = []; groups[key].push(inv); });
@@ -1401,6 +1574,15 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, set
             React.createElement(RefCard, null,
                 React.createElement("div", { className: "card-title" }, "CDI"),
                 React.createElement("div", { className: "hero-value small" }, cdi == null ? '\u2014' : fmtPct(cdi)))),
+        React.createElement(RefCard, { className: "real-card" },
+            React.createElement("div", { className: "card-title" }, "Rentabilidade real (acima da infla\u00E7\u00E3o)"),
+            React.createElement("div", { className: "real-row" },
+                React.createElement("div", null,
+                    React.createElement("span", null, "IPCA no per\u00EDodo"),
+                    React.createElement("b", null, ipca == null ? '\u2014' : fmtPct(ipca))),
+                React.createElement("div", null,
+                    React.createElement("span", null, "Rentabilidade real"),
+                    React.createElement("b", { className: real != null && real < 0 ? 'warn' : 'green-txt' }, real == null ? '\u2014' : fmtPct(real))))),
         React.createElement(RefCard, null,
             React.createElement("div", { className: "section-head" },
                 React.createElement("div", null,
@@ -1415,7 +1597,7 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, set
                 React.createElement("div", null,
                     React.createElement("h2", null, "Desempenho"),
                     React.createElement("p", null, "Evolu\u00E7\u00E3o do patrim\u00F4nio l\u00EDquido"))),
-            React.createElement(PortfolioLine, { series: evolucao })),
+            React.createElement(PortfolioLine, { series: evolucao, showInvested: true })),
         React.createElement(ReferenceAccumulatedTable, { ativos: ativos, refTaxas: refTaxas, today: today }),
         React.createElement(RefCard, null,
             React.createElement("div", { className: "section-head" },
@@ -1427,10 +1609,12 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, set
                 React.createElement("div", { className: "ct-head" },
                     React.createElement("span", null, group === 'tipo' ? 'Tipo' : 'Instituição'),
                     React.createElement("span", null, "Atual l\u00EDquido"),
-                    React.createElement("span", null, "Rent. l\u00EDquida/m\u00EAs")),
+                    React.createElement("span", null, "Acumulado"),
+                    React.createElement("span", null, "/m\u00EAs")),
                 rows.map(r => React.createElement("div", { className: "ct-row", key: r.k },
                     React.createElement("span", null, group === 'instituicao' ? nomeInstituicao(r.k) : r.k),
                     React.createElement("b", null, fmtBRL(r.l)),
+                    React.createElement("strong", { className: r.r < 0 ? 'warn' : 'green-txt' }, fmtPct(r.r)),
                     React.createElement("strong", { className: "green-txt" }, fmtPct(r.rm))))),
         React.createElement(InsightsList, { ativos: ativos, metricsById: metricsById, refTaxas: refTaxas, today: today })));
 }
