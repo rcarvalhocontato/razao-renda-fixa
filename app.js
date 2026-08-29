@@ -1631,7 +1631,7 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, set
         React.createElement(InsightsList, { ativos: ativos, metricsById: metricsById, refTaxas: refTaxas, today: today })));
 }
 function RankingRendimentoMensal({ ativos, metricsById }) {
-    if (ativos.length < 2)
+    if (ativos.length < 1)
         return null;
     const linhas = ativos.map(inv => ({ inv, m: metricsById[inv.id] })).filter(x => x.m && x.m.rentLiquidaMensal != null).sort((a, b) => b.m.rentLiquidaMensal - a.m.rentLiquidaMensal);
     if (!linhas.length)
