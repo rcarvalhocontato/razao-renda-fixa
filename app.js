@@ -591,8 +591,10 @@ function calcMetrics(inv, today, ref) {
     const rentBrutaMensal = diasCorridos > 0 ? (Math.pow(valorAtualBruto / inv.valorAplicado, 30 / diasCorridos) - 1) * 100 : null;
     const rentLiquidaMensal = diasCorridos > 0 ? (Math.pow(Math.max(valorAtualLiquido, 0.0001) / inv.valorAplicado, 30 / diasCorridos) - 1) * 100 : null;
     const duRestantes = diasUteisEntre(today, inv.dataVencimento);
-    const valorBaseProjecao = inv.tipo === 'Tesouro Direto' ? inv.valorAplicado : valorAtualBruto;
-    const valorEstBrutoVenc = valorBaseProjecao * Math.pow(1 + taxaAnual / 100, Math.max(duRestantes, 0) / 252);
+    // Projeta sempre a partir do valor ATUAL (já reflete o rendimento acumulado
+    // até hoje) até o vencimento — nunca do valor originalmente aplicado, senão
+    // o rendimento já ocorrido entre a aplicação e hoje seria descartado.
+    const valorEstBrutoVenc = valorAtualBruto * Math.pow(1 + taxaAnual / 100, Math.max(duRestantes, 0) / 252);
     const ganhoEstVenc = valorEstBrutoVenc - inv.valorAplicado;
     const diasAteVencimento = Math.max(diffDays(inv.dataAplicacao, inv.dataVencimento), 0);
     const iofAliqVenc = diasAteVencimento < 30 ? aliquotaIOFPorDias(diasAteVencimento) : 0;
@@ -1237,8 +1239,19 @@ function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxa
                         React.createElement("strong", null, vencProximos.length),
                         React.createElement("span", null, "vencimentos em at\u00E9 60 dias"))))));
 }
-function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, onNew, openEdit, deleteInvestment, onResgatar }) {
+function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, onNew, openEdit, deleteInvestment, onResgatar, pendingInvId, clearPending }) {
     const [filter, setFilter] = useState('Todas'), [q, setQ] = useState(''), [searchOpen, setSearchOpen] = useState(false), [selected, setSelected] = useState(null), [selectedPos, setSelectedPos] = useState(null), [selectedInv, setSelectedInv] = useState(null);
+    useEffect(() => {
+        if (!pendingInvId)
+            return;
+        const inv = ativos.find(i => i.id === pendingInvId);
+        if (inv) {
+            setSelected(normalizarInstituicao(inv.instituicao));
+            setSelectedPos(null);
+            setSelectedInv(inv.id);
+        }
+        clearPending();
+    }, [pendingInvId]);
     const passaFiltro = (g) => filter === 'Todas' || (filter === 'CDB' && g.items.some(i => i.tipo === 'CDB')) || (filter === 'LCI/LCA' && g.items.some(i => ['LCI', 'LCA'].includes(i.tipo))) || (filter === 'Tesouro' && g.items.some(i => i.tipo === 'Tesouro Direto')) || (filter === 'Outros' && g.items.some(i => !['CDB', 'LCI', 'LCA', 'Tesouro Direto'].includes(i.tipo)));
     const grupos = grupoInstituicoes(ativos, metricsById).filter(g => passaFiltro(g) && nomeInstituicao(g.nome).toLowerCase().includes(q.toLowerCase()));
     const totalCarteira = ativos.reduce((s, i) => s + metricsById[i.id].valorAtualLiquido, 0) || 1;
@@ -1283,6 +1296,9 @@ function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, o
                 React.createElement("div", { className: "detail-row" },
                     React.createElement("span", null, "Dias restantes"),
                     React.createElement("strong", null, m.diasRestantes >= 0 ? m.diasRestantes : 'vencido')),
+                m.diasRestantes > 0 && React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Estimativa l\u00EDquida no vencimento"),
+                    React.createElement("strong", { className: "blue-txt" }, fmtBRL(m.valorEstLiquidoVenc))),
                 React.createElement("div", { className: "detail-row" },
                     React.createElement("span", null, "Ganho l\u00EDquido (total)"),
                     React.createElement("strong", { className: "green-txt" },
@@ -1563,7 +1579,7 @@ function ReferenceComposicao({ ativos, metricsById, refTaxas, today }) {
         React.createElement("div", { className: "chips compact" }, [['instituicao', 'Por institui\u00E7\u00E3o'], ['tipo', 'Por tipo'], ['prazo', 'Por prazo']].map(x => React.createElement("button", { key: x[0], className: modo === x[0] ? 'on' : '', onClick: () => setModo(x[0]) }, x[1]))),
         React.createElement(Donut, { items: donutItems, total: total, centerLabel: fmtBRL(total) }));
 }
-function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, setTab }) {
+function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, setTab, onSelectInv }) {
     const [period, setPeriod] = useState('mes'), [group, setGroup] = useState('tipo');
     const start = periodStart(period, today, ativos);
     const ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById), cdi = cdiReturnMD(ativos, start, today, refTaxas, today), diff = ret != null && cdi != null ? ret - cdi : null, pct = ret != null && cdi > 0 ? ret / cdi * 100 : null;
@@ -1627,10 +1643,10 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, set
                     React.createElement("b", null, fmtBRL(r.l)),
                     React.createElement("strong", { className: r.r < 0 ? 'warn' : 'green-txt' }, fmtPct(r.r)),
                     React.createElement("strong", { className: "green-txt" }, fmtPct(r.rm))))),
-        React.createElement(RankingRendimentoMensal, { ativos: ativos, metricsById: metricsById }),
+        React.createElement(RankingRendimentoMensal, { ativos: ativos, metricsById: metricsById, onSelectInv: onSelectInv }),
         React.createElement(InsightsList, { ativos: ativos, metricsById: metricsById, refTaxas: refTaxas, today: today })));
 }
-function RankingRendimentoMensal({ ativos, metricsById }) {
+function RankingRendimentoMensal({ ativos, metricsById, onSelectInv }) {
     if (ativos.length < 1)
         return null;
     const linhas = ativos.map(inv => ({ inv, m: metricsById[inv.id] })).filter(x => x.m && x.m.rentLiquidaMensal != null).sort((a, b) => b.m.rentLiquidaMensal - a.m.rentLiquidaMensal);
@@ -1641,8 +1657,8 @@ function RankingRendimentoMensal({ ativos, metricsById }) {
         React.createElement("div", { className: "section-head" },
             React.createElement("div", null,
                 React.createElement("h2", null, "Ranking de rendimento (l\u00EDq./m\u00EAs)"),
-                React.createElement("p", null, "Do melhor para o pior \u2014 compare e revise estrat\u00E9gias"))),
-        React.createElement("div", { className: "rank-yield-list" }, linhas.map(({ inv, m }, i) => React.createElement("div", { className: "rank-yield-row", key: inv.id },
+                React.createElement("p", null, "Do melhor para o pior \u2014 toque para analisar cada um"))),
+        React.createElement("div", { className: "rank-yield-list" }, linhas.map(({ inv, m }, i) => React.createElement("button", { className: "rank-yield-row", key: inv.id, onClick: () => onSelectInv(inv.id) },
             React.createElement("span", { className: "rank-yield-pos" }, i + 1),
             React.createElement("div", { className: "rank-yield-mid" },
                 React.createElement("div", { className: "rank-yield-top" },
@@ -1650,7 +1666,8 @@ function RankingRendimentoMensal({ ativos, metricsById }) {
                     React.createElement("strong", { className: m.rentLiquidaMensal >= 0 ? 'green-txt' : 'warn' }, fmtPct(m.rentLiquidaMensal))),
                 React.createElement("div", { className: "rank-yield-bar" },
                     React.createElement("div", { className: m.rentLiquidaMensal >= 0 ? 'pos' : 'neg', style: { width: Math.max(4, Math.abs(m.rentLiquidaMensal) / max * 100) + '%' } })),
-                React.createElement("span", { className: "muted" }, nomeInstituicao(inv.instituicao)))))));
+                React.createElement("span", { className: "muted" }, nomeInstituicao(inv.instituicao))),
+            React.createElement(Icon, { name: "chevronRight", size: 15, color: "var(--muted)" })))));
 }
 function ReferenceInstitutions({ ativos, metricsById, setTab }) {
     const grupos = grupoInstituicoes(ativos, metricsById), total = grupos.reduce((s, g) => s + g.liquido, 0) || 1;
@@ -1744,7 +1761,7 @@ function MoreScreen({ onDados, onNew, setTab, refTaxas, taxaStatus, onRefresh, o
                     React.createElement("p", null, "Seus dados ficam armazenados localmente neste dispositivo. O aplicativo n\u00E3o depende de um servidor para guardar sua carteira.")))));
 }
 function App() {
-    const [loading, setLoading] = useState(true), [investments, setInvestments] = useState([]), [refTaxas, setRefTaxas] = useState(defaultRef), [taxaStatus, setTaxaStatus] = useState('manual'), [historicoIndices, setHistoricoIndices] = useState({ cdi: [], selic: [], status: 'idle' }), [tab, setTab] = useState('painel'), [period, setPeriod] = useState('mes'), [showForm, setShowForm] = useState(false), [editingId, setEditingId] = useState(null), [form, setForm] = useState(emptyForm), [formError, setFormError] = useState(''), [showDados, setShowDados] = useState(false), [backupMsg, setBackupMsg] = useState(''), [today, setToday] = useState(todayStr()), [historicoTick, setHistoricoTick] = useState(0), [showResgate, setShowResgate] = useState(null), [showRelatorio, setShowRelatorio] = useState(false);
+    const [loading, setLoading] = useState(true), [investments, setInvestments] = useState([]), [refTaxas, setRefTaxas] = useState(defaultRef), [taxaStatus, setTaxaStatus] = useState('manual'), [historicoIndices, setHistoricoIndices] = useState({ cdi: [], selic: [], status: 'idle' }), [tab, setTab] = useState('painel'), [period, setPeriod] = useState('mes'), [showForm, setShowForm] = useState(false), [editingId, setEditingId] = useState(null), [form, setForm] = useState(emptyForm), [formError, setFormError] = useState(''), [showDados, setShowDados] = useState(false), [backupMsg, setBackupMsg] = useState(''), [today, setToday] = useState(todayStr()), [historicoTick, setHistoricoTick] = useState(0), [showResgate, setShowResgate] = useState(null), [showRelatorio, setShowRelatorio] = useState(false), [pendingInvId, setPendingInvId] = useState(null);
     const refreshTaxas = useCallback(() => { setTaxaStatus('carregando'); fetchTaxasBCB().then(data => { const novo = { cdi: data.cdi.valor, selic: data.selic.valor, ipca: data.ipca.valor, dataCDI: data.cdi.data, dataSelic: data.selic.data, dataIPCA: data.ipca.data, atualizado: today, fonte: 'bcb' }; setRefTaxas(novo); setTaxaStatus('conectado'); storage.set('rf-taxas-referencia', JSON.stringify(novo)); }).catch(() => setTaxaStatus('offline')); }, [today]);
     useEffect(() => { (async () => { const r = await storage.get('rf-investimentos'); if (r)
         try {
@@ -1837,9 +1854,9 @@ function App() {
         React.createElement("main", null,
             tab === 'painel' && React.createElement(ReferenceDashboard, { ativos: ativos, totais: totais, ganhoLiquido: ganhoLiquido, metricsById: metricsById, refTaxas: ref, today: today, evolucao: evolucao, setTab: setTab, period: period, setPeriod: setPeriod }),
             " ",
-            tab === 'aplicacoes' && React.createElement(ReferenceApplications, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, setTab: setTab, onNew: openNew, openEdit: openEdit, deleteInvestment: deleteInvestment, onResgatar: setShowResgate }),
+            tab === 'aplicacoes' && React.createElement(ReferenceApplications, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, setTab: setTab, onNew: openNew, openEdit: openEdit, deleteInvestment: deleteInvestment, onResgatar: setShowResgate, pendingInvId: pendingInvId, clearPending: () => setPendingInvId(null) }),
             " ",
-            tab === 'analise' && React.createElement(ReferenceAnalysis, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, evolucao: evolucao, setTab: setTab }),
+            tab === 'analise' && React.createElement(ReferenceAnalysis, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, evolucao: evolucao, setTab: setTab, onSelectInv: (id) => { setPendingInvId(id); setTab('aplicacoes'); } }),
             " ",
             tab === 'instituicoes' && React.createElement(ReferenceInstitutions, { ativos: ativos, metricsById: metricsById, setTab: setTab }),
             " ",

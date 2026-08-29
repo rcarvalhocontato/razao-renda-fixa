@@ -426,7 +426,9 @@ i.dot { margin-right: 5px; vertical-align: middle; }
 
 /* ---------- Ranking de rendimento (líq./mês) ---------- */
 .rank-yield-list { display: flex; flex-direction: column; }
-.rank-yield-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--hairline); }
+.rank-yield-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--hairline); background: none; border-top: none; border-left: none; border-right: none; width: 100%; text-align: left; color: var(--text); }
+.rank-yield-row:hover { background: rgba(255,255,255,0.025); }
+.blue-txt { color: var(--blue) !important; }
 .rank-yield-row:last-child { border-bottom: none; }
 .rank-yield-pos {
   width: 20px; height: 20px; border-radius: 50%; background: var(--panel2); color: var(--muted-light);
