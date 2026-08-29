@@ -224,6 +224,16 @@ function Icon({ name, size = 16, color = 'currentColor' }) {
             React.createElement("path", { d: "M3 3v5h5" }),
             React.createElement("path", { d: "M3.1 13a9 9 0 1 0 2.6-7.4L3 8" }),
             React.createElement("path", { d: "M12 7v5l4 2" })),
+        fileText: React.createElement(React.Fragment, null,
+            React.createElement("path", { d: "M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" }),
+            React.createElement("polyline", { points: "14 2 14 8 20 8" }),
+            React.createElement("line", { x1: "8", y1: "13", x2: "16", y2: "13" }),
+            React.createElement("line", { x1: "8", y1: "17", x2: "16", y2: "17" }),
+            React.createElement("line", { x1: "8", y1: "9", x2: "10", y2: "9" })),
+        printer: React.createElement(React.Fragment, null,
+            React.createElement("polyline", { points: "6 9 6 2 18 2 18 9" }),
+            React.createElement("path", { d: "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" }),
+            React.createElement("rect", { x: "6", y: "14", width: "12", height: "8" })),
         wallet: React.createElement(React.Fragment, null,
             React.createElement("path", { d: "M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5" }),
             React.createElement("path", { d: "M18 12h.01" })),
@@ -1227,7 +1237,7 @@ function ReferenceDashboard({ ativos, totais, ganhoLiquido, metricsById, refTaxa
                         React.createElement("strong", null, vencProximos.length),
                         React.createElement("span", null, "vencimentos em at\u00E9 60 dias"))))));
 }
-function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, onNew, openEdit, deleteInvestment }) {
+function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, onNew, openEdit, deleteInvestment, onResgatar }) {
     const [filter, setFilter] = useState('Todas'), [q, setQ] = useState(''), [searchOpen, setSearchOpen] = useState(false), [selected, setSelected] = useState(null), [selectedPos, setSelectedPos] = useState(null), [selectedInv, setSelectedInv] = useState(null);
     const passaFiltro = (g) => filter === 'Todas' || (filter === 'CDB' && g.items.some(i => i.tipo === 'CDB')) || (filter === 'LCI/LCA' && g.items.some(i => ['LCI', 'LCA'].includes(i.tipo))) || (filter === 'Tesouro' && g.items.some(i => i.tipo === 'Tesouro Direto')) || (filter === 'Outros' && g.items.some(i => !['CDB', 'LCI', 'LCA', 'Tesouro Direto'].includes(i.tipo)));
     const grupos = grupoInstituicoes(ativos, metricsById).filter(g => passaFiltro(g) && nomeInstituicao(g.nome).toLowerCase().includes(q.toLowerCase()));
@@ -1284,6 +1294,7 @@ function ReferenceApplications({ ativos, metricsById, refTaxas, today, setTab, o
                     React.createElement("strong", null, inv.liquidez))),
             React.createElement("div", { className: "detail-actions" },
                 React.createElement("button", { className: "text-btn", onClick: () => openEdit(inv) }, "Editar"),
+                React.createElement("button", { className: "text-btn blue", onClick: () => onResgatar(inv.id) }, "Marcar como resgatado"),
                 React.createElement("button", { className: "text-btn warn", onClick: () => deleteInvestment(inv.id) }, "Excluir")));
     }
     if (g && selectedPos) {
@@ -1616,7 +1627,30 @@ function ReferenceAnalysis({ ativos, metricsById, refTaxas, today, evolucao, set
                     React.createElement("b", null, fmtBRL(r.l)),
                     React.createElement("strong", { className: r.r < 0 ? 'warn' : 'green-txt' }, fmtPct(r.r)),
                     React.createElement("strong", { className: "green-txt" }, fmtPct(r.rm))))),
+        React.createElement(RankingRendimentoMensal, { ativos: ativos, metricsById: metricsById }),
         React.createElement(InsightsList, { ativos: ativos, metricsById: metricsById, refTaxas: refTaxas, today: today })));
+}
+function RankingRendimentoMensal({ ativos, metricsById }) {
+    if (ativos.length < 2)
+        return null;
+    const linhas = ativos.map(inv => ({ inv, m: metricsById[inv.id] })).filter(x => x.m && x.m.rentLiquidaMensal != null).sort((a, b) => b.m.rentLiquidaMensal - a.m.rentLiquidaMensal);
+    if (!linhas.length)
+        return null;
+    const max = Math.max(...linhas.map(x => Math.abs(x.m.rentLiquidaMensal)), 0.01);
+    return React.createElement(RefCard, null,
+        React.createElement("div", { className: "section-head" },
+            React.createElement("div", null,
+                React.createElement("h2", null, "Ranking de rendimento (l\u00EDq./m\u00EAs)"),
+                React.createElement("p", null, "Do melhor para o pior \u2014 compare e revise estrat\u00E9gias"))),
+        React.createElement("div", { className: "rank-yield-list" }, linhas.map(({ inv, m }, i) => React.createElement("div", { className: "rank-yield-row", key: inv.id },
+            React.createElement("span", { className: "rank-yield-pos" }, i + 1),
+            React.createElement("div", { className: "rank-yield-mid" },
+                React.createElement("div", { className: "rank-yield-top" },
+                    React.createElement("b", null, tituloInvestimento(inv)),
+                    React.createElement("strong", { className: m.rentLiquidaMensal >= 0 ? 'green-txt' : 'warn' }, fmtPct(m.rentLiquidaMensal))),
+                React.createElement("div", { className: "rank-yield-bar" },
+                    React.createElement("div", { className: m.rentLiquidaMensal >= 0 ? 'pos' : 'neg', style: { width: Math.max(4, Math.abs(m.rentLiquidaMensal) / max * 100) + '%' } })),
+                React.createElement("span", { className: "muted" }, nomeInstituicao(inv.instituicao)))))));
 }
 function ReferenceInstitutions({ ativos, metricsById, setTab }) {
     const grupos = grupoInstituicoes(ativos, metricsById), total = grupos.reduce((s, g) => s + g.liquido, 0) || 1;
@@ -1649,10 +1683,24 @@ function ReferenceInstitutions({ ativos, metricsById, setTab }) {
                         React.createElement("strong", null, fmtBRL(g.liquido)),
                         React.createElement("small", null, fmtPct(g.liquido / total * 100)))))))));
 }
-function MoreScreen({ onDados, onNew, setTab, refTaxas, taxaStatus, onRefresh }) {
+function MoreScreen({ onDados, onNew, setTab, refTaxas, taxaStatus, onRefresh, onRelatorio, historicoCount }) {
     return React.createElement("div", { className: "screen" },
         React.createElement("div", { className: "page-head" },
             React.createElement("h1", null, "Mais")),
+        React.createElement(RefCard, { className: "settings-card" },
+            React.createElement("div", { className: "settings-title" }, "Carteira"),
+            React.createElement("button", { className: "settings-row", onClick: () => setTab('historico') },
+                React.createElement("span", { className: "settings-icon-label" },
+                    React.createElement("span", { className: "settings-icon blue" }, React.createElement(Icon, { name: "history", size: 15 })),
+                    "Hist\u00F3rico de resgates"),
+                React.createElement("span", { className: "settings-val" },
+                    historicoCount > 0 ? `${historicoCount}` : '',
+                    React.createElement(Icon, { name: "chevronRight", size: 15 }))),
+            React.createElement("button", { className: "settings-row", onClick: onRelatorio },
+                React.createElement("span", { className: "settings-icon-label" },
+                    React.createElement("span", { className: "settings-icon blue" }, React.createElement(Icon, { name: "fileText", size: 15 })),
+                    "Gerar relat\u00F3rio (PDF)"),
+                React.createElement(Icon, { name: "chevronRight", size: 15 }))),
         React.createElement(RefCard, { className: "settings-card" },
             React.createElement("div", { className: "settings-title" }, "Geral"),
             React.createElement("button", { className: "settings-row" },
@@ -1696,7 +1744,7 @@ function MoreScreen({ onDados, onNew, setTab, refTaxas, taxaStatus, onRefresh })
                     React.createElement("p", null, "Seus dados ficam armazenados localmente neste dispositivo. O aplicativo n\u00E3o depende de um servidor para guardar sua carteira.")))));
 }
 function App() {
-    const [loading, setLoading] = useState(true), [investments, setInvestments] = useState([]), [refTaxas, setRefTaxas] = useState(defaultRef), [taxaStatus, setTaxaStatus] = useState('manual'), [historicoIndices, setHistoricoIndices] = useState({ cdi: [], selic: [], status: 'idle' }), [tab, setTab] = useState('painel'), [period, setPeriod] = useState('mes'), [showForm, setShowForm] = useState(false), [editingId, setEditingId] = useState(null), [form, setForm] = useState(emptyForm), [formError, setFormError] = useState(''), [showDados, setShowDados] = useState(false), [backupMsg, setBackupMsg] = useState(''), [today, setToday] = useState(todayStr()), [historicoTick, setHistoricoTick] = useState(0);
+    const [loading, setLoading] = useState(true), [investments, setInvestments] = useState([]), [refTaxas, setRefTaxas] = useState(defaultRef), [taxaStatus, setTaxaStatus] = useState('manual'), [historicoIndices, setHistoricoIndices] = useState({ cdi: [], selic: [], status: 'idle' }), [tab, setTab] = useState('painel'), [period, setPeriod] = useState('mes'), [showForm, setShowForm] = useState(false), [editingId, setEditingId] = useState(null), [form, setForm] = useState(emptyForm), [formError, setFormError] = useState(''), [showDados, setShowDados] = useState(false), [backupMsg, setBackupMsg] = useState(''), [today, setToday] = useState(todayStr()), [historicoTick, setHistoricoTick] = useState(0), [showResgate, setShowResgate] = useState(null), [showRelatorio, setShowRelatorio] = useState(false);
     const refreshTaxas = useCallback(() => { setTaxaStatus('carregando'); fetchTaxasBCB().then(data => { const novo = { cdi: data.cdi.valor, selic: data.selic.valor, ipca: data.ipca.valor, dataCDI: data.cdi.data, dataSelic: data.selic.data, dataIPCA: data.ipca.data, atualizado: today, fonte: 'bcb' }; setRefTaxas(novo); setTaxaStatus('conectado'); storage.set('rf-taxas-referencia', JSON.stringify(novo)); }).catch(() => setTaxaStatus('offline')); }, [today]);
     useEffect(() => { (async () => { const r = await storage.get('rf-investimentos'); if (r)
         try {
@@ -1740,8 +1788,14 @@ function App() {
         persist(investments.map(inv => inv.id === editingId ? { ...inv, ...campos } : inv));
     else
         persist([...investments, { id: uid(), ...campos, status: 'ativo', historico: [{ id: uid(), data: campos.dataAplicacao, valorBruto: valor }] }]); setShowForm(false); }
-    function deleteInvestment(id) { if (confirm('Excluir esta aplicação?'))
+    function deleteInvestment(id) { if (confirm('Excluir esta aplicação? Essa ação não pode ser desfeita e não fica no histórico.'))
         persist(investments.filter(i => i.id !== id)); }
+    function resgatarInvestimento(id, dataResgate, valorLiquido, valorBruto) {
+        persist(investments.map(inv => inv.id === id ? { ...inv, status: 'resgatado', dataResgate, valorResgatadoLiquido: valorLiquido, valorResgatadoBruto: valorBruto } : inv));
+    }
+    function reabrirInvestimento(id) {
+        persist(investments.map(inv => inv.id === id ? { ...inv, status: 'ativo', dataResgate: undefined, valorResgatadoLiquido: undefined, valorResgatadoBruto: undefined } : inv));
+    }
     function exportarBackup() { try {
         baixarBackup();
         setBackupMsg('Backup exportado.');
@@ -1751,41 +1805,53 @@ function App() {
     } }
     async function importarBackup(file) { try {
         const payload = await lerBackupArquivo(file);
-        if (!payload || payload.app !== 'Razão — Renda Fixa' || !Array.isArray(payload.investments))
-            throw new Error('Backup inválido.');
-        if (!confirm(`Importar ${payload.investments.length} investimentos?`))
+        if (!payload || !Array.isArray(payload.investments))
+            throw new Error('Arquivo de backup inválido: não encontrei a lista de investimentos.');
+        // Saneamento defensivo: preenche campos essenciais que possam faltar em
+        // backups mais antigos, em vez de rejeitar o arquivo inteiro ou quebrar
+        // a tela depois de importado.
+        const sane = payload.investments.filter(i => i && i.instituicao && i.tipo && i.valorAplicado && i.dataAplicacao && i.dataVencimento).map(i => ({ ...i, id: i.id || uid(), status: i.status === 'resgatado' ? 'resgatado' : 'ativo', historico: Array.isArray(i.historico) ? i.historico : [] }));
+        const ignorados = payload.investments.length - sane.length;
+        const nAtivos = sane.filter(i => i.status === 'ativo').length, nHistorico = sane.filter(i => i.status === 'resgatado').length;
+        if (!confirm(`Importar ${sane.length} investimento${sane.length === 1 ? '' : 's'} (${nAtivos} ativo${nAtivos === 1 ? '' : 's'} + ${nHistorico} no hist\u00F3rico)${ignorados ? `, ignorando ${ignorados} registro(s) incompleto(s)` : ''}? Isso substitui os dados atuais deste aparelho.`))
             return;
-        await storage.set('rf-investimentos', JSON.stringify(payload.investments));
+        await storage.set('rf-investimentos', JSON.stringify(sane));
         if (payload.taxas)
             await storage.set('rf-taxas-referencia', JSON.stringify(payload.taxas));
-        setInvestments(payload.investments);
+        setInvestments(sane);
         if (payload.taxas)
             setRefTaxas(payload.taxas);
-        setBackupMsg(`Importados ${payload.investments.length} investimentos.`);
+        setBackupMsg(`Importados ${sane.length} investimentos (${nAtivos} ativos, ${nHistorico} no histórico)${ignorados ? ` — ${ignorados} registro(s) ignorado(s) por estarem incompletos` : ''}.`);
     }
     catch (e) {
         setBackupMsg(e.message || 'Falha ao importar backup.');
     } }
-    const ativos = useMemo(() => investments.filter(i => i.status === 'ativo'), [investments]), metricsById = useMemo(() => { const m = {}; investments.forEach(i => m[i.id] = calcMetrics(i, today, ref)); return m; }, [investments, today, refTaxas, historicoIndices, vTick]);
+    const ativos = useMemo(() => investments.filter(i => i.status === 'ativo'), [investments]), historico = useMemo(() => investments.filter(i => i.status === 'resgatado'), [investments]), metricsById = useMemo(() => { const m = {}; investments.forEach(i => m[i.id] = calcMetrics(i, today, ref)); return m; }, [investments, today, refTaxas, historicoIndices, vTick]);
     const totais = useMemo(() => ativos.reduce((a, i) => { const m = metricsById[i.id]; a.aplicado += Number(i.valorAplicado) || 0; a.bruto += m.valorAtualBruto || 0; a.liquido += m.valorAtualLiquido || 0; a.estimadoVenc += m.valorEstLiquidoVenc || 0; return a; }, { aplicado: 0, bruto: 0, liquido: 0, estimadoVenc: 0 }), [ativos, metricsById]), ganhoLiquido = totais.liquido - totais.aplicado, evolucao = useMemo(() => buildEvolutionSeries(ativos, metricsById, today), [ativos, metricsById, today]);
     if (loading)
         return React.createElement("div", { className: "loading-screen" }, "Carregando sua carteira\u2026");
+    if (showRelatorio)
+        return React.createElement(RelatorioPrint, { ativos: ativos, historico: historico, totais: totais, ganhoLiquido: ganhoLiquido, metricsById: metricsById, refTaxas: ref, today: today, onClose: () => setShowRelatorio(false) });
     return React.createElement("div", { className: "ref-app" },
         React.createElement(ReferenceHeader, { refTaxas: refTaxas, status: taxaStatus, onRefresh: refreshTaxas, onNew: openNew, onDados: () => { setBackupMsg(''); setShowDados(true); }, tab: tab, setTab: setTab }),
         React.createElement("main", null,
             tab === 'painel' && React.createElement(ReferenceDashboard, { ativos: ativos, totais: totais, ganhoLiquido: ganhoLiquido, metricsById: metricsById, refTaxas: ref, today: today, evolucao: evolucao, setTab: setTab, period: period, setPeriod: setPeriod }),
             " ",
-            tab === 'aplicacoes' && React.createElement(ReferenceApplications, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, setTab: setTab, onNew: openNew, openEdit: openEdit, deleteInvestment: deleteInvestment }),
+            tab === 'aplicacoes' && React.createElement(ReferenceApplications, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, setTab: setTab, onNew: openNew, openEdit: openEdit, deleteInvestment: deleteInvestment, onResgatar: setShowResgate }),
             " ",
             tab === 'analise' && React.createElement(ReferenceAnalysis, { ativos: ativos, metricsById: metricsById, refTaxas: ref, today: today, evolucao: evolucao, setTab: setTab }),
             " ",
             tab === 'instituicoes' && React.createElement(ReferenceInstitutions, { ativos: ativos, metricsById: metricsById, setTab: setTab }),
             " ",
-            tab === 'mais' && React.createElement(MoreScreen, { onDados: () => { setBackupMsg(''); setShowDados(true); }, onNew: openNew, setTab: setTab, refTaxas: refTaxas, taxaStatus: taxaStatus, onRefresh: refreshTaxas })),
+            tab === 'historico' && React.createElement(HistoricoScreen, { historico: historico, refTaxas: ref, today: today, reabrirInvestimento: reabrirInvestimento, deleteInvestment: deleteInvestment, setTab: setTab }),
+            " ",
+            tab === 'mais' && React.createElement(MoreScreen, { onDados: () => { setBackupMsg(''); setShowDados(true); }, onNew: openNew, setTab: setTab, refTaxas: refTaxas, taxaStatus: taxaStatus, onRefresh: refreshTaxas, onRelatorio: () => setShowRelatorio(true), historicoCount: historico.length })),
         React.createElement("nav", { className: "bottom-nav" }, [['painel', 'Painel', 'home'], ['aplicacoes', 'Aplicações', 'bank'], ['analise', 'Análise', 'barChart'], ['mais', 'Mais', 'menu']].map(([k, l, ic]) => React.createElement("button", { key: k, className: tab === k ? 'active' : '', onClick: () => setTab(k) },
             React.createElement(Icon, { name: ic, size: 18 }),
             React.createElement("span", null, l)))),
-        showDados && React.createElement(DadosModal, { onClose: () => setShowDados(false), onExport: exportarBackup, onImport: importarBackup, message: backupMsg }),
+        showDados && React.createElement(DadosModal, { onClose: () => setShowDados(false), onExport: exportarBackup, onImport: importarBackup, message: backupMsg, investmentsCount: investments.length }),
+        " ",
+        showResgate && React.createElement(ResgateModal, { inv: investments.find(i => i.id === showResgate), metrics: metricsById[showResgate], onClose: () => setShowResgate(null), onConfirm: (data, liq, bru) => { resgatarInvestimento(showResgate, data, liq, bru); setShowResgate(null); } }),
         " ",
         showForm && React.createElement(FormModal, { form: form, setForm: setForm, editingId: editingId, formError: formError, refTaxas: ref, investments: investments, onClose: () => setShowForm(false), onSave: handleSave, onTipoChange: handleTipoChange }));
 }
@@ -2227,7 +2293,284 @@ function InvestmentCompact({ inv, metricsById, expandedId, setExpandedId, openEd
                 React.createElement(IconBtn, { onClick: () => deleteInvestment(inv.id), title: "Excluir", danger: true },
                     React.createElement(Icon, { name: "trash", size: 13 })))));
 }
-function DadosModal({ onClose, onExport, onImport, message }) {
+function ResgateModal({ inv, metrics, onClose, onConfirm }) {
+    const [data, setData] = useState(todayStr());
+    const [valorLiquido, setValorLiquido] = useState(metrics ? String(Math.round(metrics.valorAtualLiquido * 100) / 100) : '');
+    const [valorBruto, setValorBruto] = useState(metrics ? String(Math.round(metrics.valorAtualBruto * 100) / 100) : '');
+    if (!inv)
+        return null;
+    const vl = Number(valorLiquido) || 0, ganho = vl - Number(inv.valorAplicado), rentPct = inv.valorAplicado ? (vl / Number(inv.valorAplicado) - 1) * 100 : 0;
+    return React.createElement("div", { style: { position: 'fixed', inset: 0, background: '#000000C8', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 'max(20px,env(safe-area-inset-top)) 14px 28px', overflowY: 'auto', zIndex: 60 } },
+        React.createElement("div", { style: { background: C.panel, borderRadius: 18, width: '100%', maxWidth: 480, padding: 20, boxShadow: shadow, borderTop: `1px solid ${C.hairline}` } },
+            React.createElement("div", { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 } },
+                React.createElement("h2", { style: { fontSize: 17, fontWeight: 800, margin: 0 } }, "Marcar como resgatado"),
+                React.createElement("button", { onClick: onClose, style: { background: 'none', border: 'none', color: C.muted, cursor: 'pointer' } },
+                    React.createElement(Icon, { name: "x", size: 19 }))),
+            React.createElement("div", { style: { fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 } },
+                tituloInvestimento(inv),
+                " \u2014 ",
+                nomeInstituicao(inv.instituicao),
+                ". Isso remove a aplica\u00E7\u00E3o das suas posi\u00E7\u00F5es ativas e guarda no Hist\u00F3rico, com o quanto ela rendeu."),
+            React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 13 } },
+                React.createElement(Field, { label: "Data do resgate" },
+                    React.createElement("input", { type: "date", style: inputStyle, value: data, onChange: e => setData(e.target.value) })),
+                React.createElement(Field, { label: "Valor l\u00EDquido recebido", hint: "J\u00E1 descontando IR/IOF, se houver" },
+                    React.createElement("input", { type: "number", step: "0.01", style: inputStyle, value: valorLiquido, onChange: e => setValorLiquido(e.target.value) })),
+                React.createElement(Field, { label: "Valor bruto (opcional)" },
+                    React.createElement("input", { type: "number", step: "0.01", style: inputStyle, value: valorBruto, onChange: e => setValorBruto(e.target.value) })),
+                React.createElement("div", { style: { background: C.panel2, borderRadius: 10, padding: 12, fontSize: 12 } },
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 4 } },
+                        React.createElement("span", { style: { color: C.muted } }, "Valor aplicado"),
+                        React.createElement("b", null, fmtBRL(inv.valorAplicado))),
+                    React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between' } },
+                        React.createElement("span", { style: { color: C.muted } }, "Ganho / Rentabilidade"),
+                        React.createElement("b", { style: { color: ganho >= 0 ? C.green : C.red } },
+                            fmtBRL(ganho),
+                            " (",
+                            fmtPct(rentPct),
+                            ")")))),
+            React.createElement("div", { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 } },
+                React.createElement("button", { onClick: onClose, style: { background: 'none', border: `1px solid ${C.hairline}`, color: C.muted, borderRadius: 9, padding: '9px 14px', cursor: 'pointer' } }, "Cancelar"),
+                React.createElement("button", { onClick: () => onConfirm(data, vl, Number(valorBruto) || vl), disabled: !data || !valorLiquido, style: { background: C.blue, border: 'none', color: '#fff', borderRadius: 9, padding: '9px 16px', cursor: 'pointer', fontWeight: 750, opacity: (!data || !valorLiquido) ? .5 : 1 } }, "Confirmar resgate"))));
+}
+function HistoricoScreen({ historico, refTaxas, today, reabrirInvestimento, deleteInvestment, setTab }) {
+    const [selectedInv, setSelectedInv] = useState(null);
+    const linhas = historico.map(inv => {
+        const dias = Math.max(diffDays(inv.dataAplicacao, inv.dataResgate || today), 1);
+        const vl = inv.valorResgatadoLiquido ?? 0;
+        const rentTotal = inv.valorAplicado ? (vl / inv.valorAplicado - 1) * 100 : 0;
+        const rentMensal = (Math.pow(Math.max(vl, 0.0001) / inv.valorAplicado, 30 / dias) - 1) * 100;
+        return { inv, dias, ganho: vl - inv.valorAplicado, rentTotal, rentMensal };
+    }).sort((a, b) => (b.inv.dataResgate || '').localeCompare(a.inv.dataResgate || ''));
+    const totalGanho = linhas.reduce((s, l) => s + l.ganho, 0);
+    const sel = selectedInv ? linhas.find(l => l.inv.id === selectedInv) : null;
+    if (sel) {
+        const { inv, dias, ganho, rentTotal, rentMensal } = sel;
+        return React.createElement("div", { className: "screen" },
+            React.createElement("button", { className: "back-btn", onClick: () => setSelectedInv(null) }, "\u2039 Hist\u00F3rico"),
+            React.createElement(RefCard, { className: "detail-hero" },
+                React.createElement("div", null,
+                    React.createElement("span", { className: "type-pill" }, inv.tipo),
+                    React.createElement("h1", null, tituloInvestimento(inv)),
+                    React.createElement("p", null,
+                        fmtData(inv.dataAplicacao),
+                        " \u2192 ",
+                        fmtData(inv.dataResgate))),
+                React.createElement(InstitutionMark, { nome: inv.instituicao, size: 40 })),
+            React.createElement(RefCard, { className: "detail-rows" },
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor aplicado"),
+                    React.createElement("strong", null, fmtBRL(inv.valorAplicado))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor resgatado (l\u00EDquido)"),
+                    React.createElement("strong", null, fmtBRL(inv.valorResgatadoLiquido))),
+                inv.valorResgatadoBruto != null && React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Valor resgatado (bruto)"),
+                    React.createElement("strong", null, fmtBRL(inv.valorResgatadoBruto))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Dias que ficou aplicado"),
+                    React.createElement("strong", null, dias)),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Rentabilidade total"),
+                    React.createElement("strong", { className: ganho >= 0 ? 'green-txt' : 'warn' },
+                        fmtBRL(ganho),
+                        " \u25B2 ",
+                        fmtPct(rentTotal))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Equivalente ao m\u00EAs"),
+                    React.createElement("strong", { className: rentMensal >= 0 ? 'green-txt' : 'warn' }, fmtPct(rentMensal))),
+                React.createElement("div", { className: "detail-row" },
+                    React.createElement("span", null, "Taxa contratada"),
+                    React.createElement("strong", null, taxaCurta(inv)))),
+            React.createElement("div", { className: "detail-actions" },
+                React.createElement("button", { className: "text-btn", onClick: () => { reabrirInvestimento(inv.id); setSelectedInv(null); } }, "Reabrir como ativo"),
+                React.createElement("button", { className: "text-btn warn", onClick: () => deleteInvestment(inv.id) }, "Excluir do hist\u00F3rico")));
+    }
+    return React.createElement("div", { className: "screen" },
+        React.createElement("button", { className: "back-btn", onClick: () => setTab('mais') }, "\u2039 Mais"),
+        React.createElement("div", { className: "page-head" },
+            React.createElement("h1", null, "Hist\u00F3rico")),
+        linhas.length > 0 && React.createElement(RefCard, null,
+            React.createElement("div", { className: "card-title" }, "Total resgatado \u2014 ganho acumulado"),
+            React.createElement("div", { className: "hero-value small" },
+                React.createElement("span", { className: totalGanho >= 0 ? 'green-txt' : 'warn' }, fmtBRL(totalGanho))),
+            React.createElement("div", { className: "hero-note" },
+                linhas.length,
+                " aplica\u00E7\u00E3o",
+                linhas.length > 1 ? '\u00F5es' : '',
+                " encerrada",
+                linhas.length > 1 ? 's' : '')),
+        linhas.length === 0 && React.createElement(RefCard, null,
+            React.createElement("div", { className: "empty-chart" }, "Quando voc\u00EA marcar uma aplica\u00E7\u00E3o como resgatada, ela aparece aqui \u2014 com o quanto rendeu em % e em R$.")),
+        React.createElement("div", { className: "detail-list" }, linhas.map(({ inv, ganho, rentTotal, rentMensal }) => React.createElement(RefCard, { key: inv.id, className: "investment-card" },
+            React.createElement("button", { className: "investment-hit", onClick: () => setSelectedInv(inv.id) },
+                React.createElement("div", { className: "inv-top" },
+                    React.createElement("h3", null, tituloInvestimento(inv)),
+                    React.createElement("span", { className: "type-pill" }, inv.tipo)),
+                React.createElement("div", { className: "inv-mid" },
+                    React.createElement("strong", { className: ganho >= 0 ? 'green-txt' : 'warn' }, fmtBRL(ganho)),
+                    React.createElement("span", { className: "inv-venc" },
+                        "resgatado em ",
+                        fmtData(inv.dataResgate))),
+                React.createElement("div", { className: "inv-rate" },
+                    React.createElement("i", { className: `dot ${ganho >= 0 ? 'green' : 'red'}` }),
+                    fmtPct(rentTotal),
+                    " total \u00B7 ",
+                    fmtPct(rentMensal),
+                    " equiv./m\u00EAs \u00B7 ",
+                    nomeInstituicao(inv.instituicao)))))));
+}
+function RelatorioPrint({ ativos, historico, totais, ganhoLiquido, metricsById, refTaxas, today, onClose }) {
+    const mesIni = periodStart('mes', today, ativos), anoIni = periodStart('ano', today, ativos), inicioIni = periodStart('todo', today, ativos);
+    const periodos = [
+        ['M\u00EAs', mesIni], ['Ano', anoIni], ['Desde o in\u00EDcio', inicioIni],
+    ].map(([label, start]) => {
+        const ret = periodReturnMD(ativos, start, today, refTaxas, today, metricsById);
+        const cdi = cdiReturnMD(ativos, start, today, refTaxas, today);
+        const ipca = ipcaReturnApprox(start, today, refTaxas);
+        const ganho = periodGainBRL(ativos, start, today, refTaxas, today);
+        return { label, ret, cdi, ipca, ganho };
+    });
+    const grupos = grupoInstituicoes(ativos, metricsById);
+    const porTipo = {};
+    ativos.forEach(inv => { const k = inv.tipo; if (!porTipo[k])
+        porTipo[k] = { valor: 0, aplicado: 0 }; porTipo[k].valor += metricsById[inv.id].valorAtualLiquido; porTipo[k].aplicado += Number(inv.valorAplicado) || 0; });
+    const tipos = Object.entries(porTipo).map(([k, v]) => ({ tipo: k, valor: v.valor, aplicado: v.aplicado })).sort((a, b) => b.valor - a.valor);
+    const ranking = ativos.map(inv => ({ inv, m: metricsById[inv.id] })).filter(x => x.m.rentLiquidaMensal != null).sort((a, b) => b.m.rentLiquidaMensal - a.m.rentLiquidaMensal);
+    const historicoOrdenado = historico.slice().sort((a, b) => (b.dataResgate || '').localeCompare(a.dataResgate || ''));
+    const totalHistoricoGanho = historicoOrdenado.reduce((s, i) => s + ((i.valorResgatadoLiquido ?? 0) - i.valorAplicado), 0);
+    const th = { textAlign: 'left', padding: '6px 8px', fontSize: 10, color: '#667085', textTransform: 'uppercase', letterSpacing: '.03em', borderBottom: '1px solid #E4E7EC' };
+    const td = { padding: '7px 8px', fontSize: 11.5, borderBottom: '1px solid #F0F1F3' };
+    const section = { background: '#fff', border: '1px solid #E4E7EC', borderRadius: 10, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' };
+    const h2 = { fontSize: 13, fontWeight: 800, marginBottom: 10, color: '#101828' };
+    return React.createElement("div", { style: { background: '#F5F6F8', minHeight: '100dvh', color: '#101828', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" } },
+        React.createElement("div", { className: "no-print", style: { position: 'sticky', top: 0, zIndex: 10, background: '#101828', color: '#fff', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+            React.createElement("button", { onClick: onClose, style: { background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' } }, "\u2039 Voltar"),
+            React.createElement("button", { onClick: () => window.print(), style: { background: '#2F80ED', border: 'none', color: '#fff', borderRadius: 8, padding: '8px 14px', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 } },
+                React.createElement(Icon, { name: "printer", size: 14 }),
+                " Baixar / imprimir PDF")),
+        React.createElement("div", { style: { maxWidth: 720, margin: '0 auto', padding: '18px 16px 40px' } },
+            React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: 'Georgia, serif', fontWeight: 800, fontSize: 20, color: '#101828' } }, "RAZ\u00C3O"),
+                    React.createElement("div", { style: { fontSize: 9.5, letterSpacing: '.15em', color: '#98A2AF', fontWeight: 700 } }, "RENDA FIXA")),
+                React.createElement("div", { style: { textAlign: 'right', fontSize: 11, color: '#667085' } },
+                    React.createElement("div", null, "Relat\u00F3rio da carteira"),
+                    React.createElement("div", null, fmtData(today)))),
+            React.createElement("div", { style: section },
+                React.createElement("div", { style: h2 }, "Resumo"),
+                React.createElement("div", { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 10.5, color: '#667085' } }, "Patrim\u00F4nio l\u00EDquido"),
+                        React.createElement("div", { style: { fontSize: 19, fontWeight: 800 } }, fmtBRL(totais.liquido))),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 10.5, color: '#667085' } }, "Patrim\u00F4nio bruto"),
+                        React.createElement("div", { style: { fontSize: 19, fontWeight: 800 } }, fmtBRL(totais.bruto))),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 10.5, color: '#667085' } }, "Ganho l\u00EDquido (desde o in\u00EDcio)"),
+                        React.createElement("div", { style: { fontSize: 15, fontWeight: 800, color: ganhoLiquido >= 0 ? '#16A34A' : '#DC2626' } }, fmtBRL(ganhoLiquido))),
+                    React.createElement("div", null,
+                        React.createElement("div", { style: { fontSize: 10.5, color: '#667085' } }, "Investimentos ativos"),
+                        React.createElement("div", { style: { fontSize: 15, fontWeight: 800 } },
+                            ativos.length,
+                            " em ",
+                            grupos.length,
+                            " institui\u00E7\u00F5es")))),
+            React.createElement("div", { style: section },
+                React.createElement("div", { style: h2 }, "Rentabilidade x CDI x IPCA"),
+                React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse' } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { style: th }, "Per\u00EDodo"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Resultado"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Carteira"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "CDI"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "IPCA"))),
+                    React.createElement("tbody", null, periodos.map(p => React.createElement("tr", { key: p.label },
+                        React.createElement("td", { style: td }, p.label),
+                        React.createElement("td", { style: { ...td, textAlign: 'right', fontWeight: 700 } }, p.ganho == null ? '\u2014' : fmtBRL(p.ganho)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right', fontWeight: 700, color: p.ret != null && p.cdi != null && p.ret < p.cdi ? '#DC2626' : '#16A34A' } }, p.ret == null ? '\u2014' : fmtPct(p.ret)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, p.cdi == null ? '\u2014' : fmtPct(p.cdi)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, p.ipca == null ? '\u2014' : fmtPct(p.ipca))))))),
+            React.createElement("div", { style: section },
+                React.createElement("div", { style: h2 }, "Aloca\u00E7\u00E3o por institui\u00E7\u00E3o"),
+                React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse' } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { style: th }, "Institui\u00E7\u00E3o"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Valor l\u00EDquido"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "% carteira"))),
+                    React.createElement("tbody", null, grupos.map(g => React.createElement("tr", { key: g.key },
+                        React.createElement("td", { style: td }, nomeInstituicao(g.nome)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, fmtBRL(g.liquido)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, fmtPct(g.liquido / (totais.liquido || 1) * 100))))))),
+            React.createElement("div", { style: section },
+                React.createElement("div", { style: h2 }, "Aloca\u00E7\u00E3o por tipo de ativo"),
+                React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse' } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { style: th }, "Tipo"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Valor l\u00EDquido"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "% carteira"))),
+                    React.createElement("tbody", null, tipos.map(t => React.createElement("tr", { key: t.tipo },
+                        React.createElement("td", { style: td }, t.tipo),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, fmtBRL(t.valor)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, fmtPct(t.valor / (totais.liquido || 1) * 100))))))),
+            React.createElement("div", { style: section },
+                React.createElement("div", { style: h2 }, "Posi\u00E7\u00F5es ativas"),
+                React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse' } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { style: th }, "Aplica\u00E7\u00E3o"),
+                            React.createElement("th", { style: th }, "Institui\u00E7\u00E3o"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Aplicado"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Atual l\u00EDq."),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Rent. total"),
+                            React.createElement("th", { style: th }, "Vencimento"))),
+                    React.createElement("tbody", null, ativos.map(inv => { const m = metricsById[inv.id]; return React.createElement("tr", { key: inv.id },
+                        React.createElement("td", { style: td }, tituloInvestimento(inv)),
+                        React.createElement("td", { style: td }, nomeInstituicao(inv.instituicao)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, fmtBRL(inv.valorAplicado)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right', fontWeight: 700 } }, fmtBRL(m.valorAtualLiquido)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right', color: m.rentLiquidaTotal >= 0 ? '#16A34A' : '#DC2626' } }, fmtPct(m.rentLiquidaTotal)),
+                        React.createElement("td", { style: td }, fmtData(inv.dataVencimento))); })))),
+            ranking.length > 1 && React.createElement("div", { style: section },
+                React.createElement("div", { style: h2 }, "Ranking de rendimento l\u00EDquido/m\u00EAs"),
+                React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse' } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { style: th }, "#"),
+                            React.createElement("th", { style: th }, "Aplica\u00E7\u00E3o"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "L\u00EDq./m\u00EAs"))),
+                    React.createElement("tbody", null, ranking.map(({ inv, m }, i) => React.createElement("tr", { key: inv.id },
+                        React.createElement("td", { style: td }, i + 1),
+                        React.createElement("td", { style: td },
+                            tituloInvestimento(inv),
+                            " \u2014 ",
+                            nomeInstituicao(inv.instituicao)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right', fontWeight: 700, color: m.rentLiquidaMensal >= 0 ? '#16A34A' : '#DC2626' } }, fmtPct(m.rentLiquidaMensal))))))),
+            historicoOrdenado.length > 0 && React.createElement("div", { style: section },
+                React.createElement("div", { style: h2 }, "Hist\u00F3rico de resgates"),
+                React.createElement("div", { style: { fontSize: 11, color: '#667085', marginBottom: 8 } },
+                    "Ganho acumulado em posi\u00E7\u00F5es encerradas: ",
+                    React.createElement("b", { style: { color: totalHistoricoGanho >= 0 ? '#16A34A' : '#DC2626' } }, fmtBRL(totalHistoricoGanho))),
+                React.createElement("table", { style: { width: '100%', borderCollapse: 'collapse' } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            React.createElement("th", { style: th }, "Aplica\u00E7\u00E3o"),
+                            React.createElement("th", { style: th }, "Resgate"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Aplicado"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Resgatado"),
+                            React.createElement("th", { style: { ...th, textAlign: 'right' } }, "Rentab."))),
+                    React.createElement("tbody", null, historicoOrdenado.map(inv => { const vl = inv.valorResgatadoLiquido ?? 0, rent = inv.valorAplicado ? (vl / inv.valorAplicado - 1) * 100 : 0; return React.createElement("tr", { key: inv.id },
+                        React.createElement("td", { style: td }, tituloInvestimento(inv)),
+                        React.createElement("td", { style: td }, fmtData(inv.dataResgate)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right' } }, fmtBRL(inv.valorAplicado)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right', fontWeight: 700 } }, fmtBRL(vl)),
+                        React.createElement("td", { style: { ...td, textAlign: 'right', color: rent >= 0 ? '#16A34A' : '#DC2626' } }, fmtPct(rent))); })))),
+            React.createElement("div", { style: { textAlign: 'center', fontSize: 10, color: '#98A2AF', marginTop: 20 } }, "Gerado pelo app R\u00E1z\u00E3o \u00B7 Renda Fixa \u2014 dados armazenados apenas neste dispositivo.")));
+}
+function DadosModal({ onClose, onExport, onImport, message, investmentsCount }) {
     const inputRef = React.useRef(null);
     return React.createElement("div", { style: { position: 'fixed', inset: 0, background: '#000000C8', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 'max(20px,env(safe-area-inset-top)) 14px 28px', overflowY: 'auto', zIndex: 60 } },
         React.createElement("div", { style: { background: C.panel, borderRadius: 18, width: '100%', maxWidth: 520, padding: 20, boxShadow: shadow, borderTop: `1px solid ${C.hairline}` } },
@@ -2239,7 +2582,12 @@ function DadosModal({ onClose, onExport, onImport, message }) {
                     React.createElement(Icon, { name: "x", size: 19 }))),
             React.createElement("div", { style: { background: C.panel2, borderRadius: 12, padding: 13, marginBottom: 10 } },
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 12 } }, "Exportar"),
-                React.createElement("div", { style: { fontSize: 11, color: C.muted, lineHeight: 1.45, margin: '5px 0 10px' } }, "Cria um arquivo JSON com investimentos, aportes vinculados e taxas salvas. Guarde esse arquivo fora do aparelho."),
+                React.createElement("div", { style: { fontSize: 11, color: C.muted, lineHeight: 1.45, margin: '5px 0 10px' } },
+                    "Cria um arquivo JSON com todas as suas aplica\u00E7\u00F5es (ativas e do hist\u00F3rico), aportes vinculados e taxas salvas \u2014 ",
+                    React.createElement("b", { style: { color: C.text } },
+                        investmentsCount,
+                        " no total"),
+                    ". Guarde esse arquivo fora do aparelho (e-mail, nuvem, etc.) para poder restaurar em outro celular."),
                 React.createElement("button", { onClick: onExport, style: { background: C.blue, color: '#fff', border: 'none', borderRadius: 9, padding: '9px 12px', fontWeight: 800, cursor: 'pointer' } }, "Exportar backup")),
             React.createElement("div", { style: { background: C.panel2, borderRadius: 12, padding: 13 } },
                 React.createElement("div", { style: { fontWeight: 800, fontSize: 12 } }, "Importar"),
