@@ -555,6 +555,8 @@ function calcMetrics(inv, today, ref) {
     }
     else if (!usaOverride && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
         const dataRendimento = ultimaDataCDI || ancoraData;
+        // Na aplicação inicial, a instituição já remunera no próprio dia do
+        // aporte (confirmado: pós-fixado batia certo com o extrato do banco).
         valorAtualBruto = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, dataRendimento, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
         // O CDI diário do SGS pode aparecer com defasagem de um dia útil.
         // Enquanto o dado oficial não chega, provisionamos apenas os dias úteis
@@ -573,10 +575,11 @@ function calcMetrics(inv, today, ref) {
         precisao = diasProv > 0 ? 'historico-provisorio' : 'historico';
     }
     else {
-        // Prefixados usam base DU/252. Para uma nova aplicação, a data de liquidação
-        // é inclusiva; para um saldo informado por extrato, o saldo já representa
-        // aquele dia e a remuneração começa no próximo pregão.
-        const duPrefixado = diasUteisEntre(ancoraData, today) + (inv.indexador === 'Prefixado' && ancoraData === inv.dataAplicacao && ehDiaUtilMercado(new Date(ancoraData + 'T00:00:00')) ? 1 : 0);
+        // Prefixados (e demais sem série histórica) usam base DU/252, contando
+        // apenas pregões encerrados: do dia seguinte ao aporte até ontem — o
+        // dia do aporte e o dia de hoje (ainda não fechado) nunca entram na
+        // contagem. Validado contra extrato real de banco.
+        const duPrefixado = diasUteisEntre(ancoraData, ontemISO(today));
         valorAtualBruto = ancoraValor * Math.pow(1 + taxaAnual / 100, Math.max(duPrefixado, 0) / 252);
     }
     const ganhoBruto = valorAtualBruto - inv.valorAplicado;
@@ -641,6 +644,8 @@ function valorProjetadoEm(inv, dataAlvo, ref, today) {
     } });
     const usaOverride = inv.taxaOverrideAnual !== '' && inv.taxaOverrideAnual != null && !Number.isNaN(Number(inv.taxaOverrideAnual));
     const passado = dataAlvo <= today;
+    // Prefixado usa convenção D+1 (validado com extrato real); pós-fixado (CDI/
+    // Selic) já remunerava certo desde o dia do aporte — mantido como estava.
     if (!usaOverride && passado && inv.indexador === 'CDI' && ref.historicoCDI && ref.historicoCDI.length) {
         const ultimo = ultimaDataDisponivel(ref.historicoCDI, dataAlvo) || ancoraData;
         let valor = ancoraValor * fatorAcumulado(ref.historicoCDI, ancoraData, ultimo, (Number(inv.parametroValor) || 0) / 100, ancoraData === inv.dataAplicacao);
@@ -659,9 +664,8 @@ function valorProjetadoEm(inv, dataAlvo, ref, today) {
             valor *= Math.pow(1 + taxaAnualEfetiva(inv, ref) / 100, diasProv / 252);
         return valor;
     }
-    let du = diasUteisEntre(ancoraData, dataAlvo);
-    if (inv.indexador === 'Prefixado' && ancoraData === inv.dataAplicacao && ehDiaUtilMercado(new Date(ancoraData + 'T00:00:00')))
-        du += 1;
+    const limiteAlvo = dataAlvo < today ? dataAlvo : ontemISO(today);
+    const du = diasUteisEntre(ancoraData, limiteAlvo);
     const taxaAnual = taxaAnualEfetiva(inv, ref);
     return ancoraValor * Math.pow(1 + taxaAnual / 100, Math.max(du, 0) / 252);
 }
@@ -1005,6 +1009,9 @@ function cdiReturnMD(ativos, inicio, fim, ref, today) {
         const dias = Math.max(diffDays(inicio, fim), 0);
         return (Math.pow(1 + ref.cdi / 100, dias / 365) - 1) * 100;
     }
+    // Pós-fixado remunera desde o próprio dia do aporte (mantido — confirmado
+    // certo); só o dia de hoje (ainda não fechado) fica de fora da contagem.
+    const limiteFim = fim < today ? fim : ontemISO(today);
     const totalDays = Math.max(diffDays(inicio, fim), 1);
     let V0 = 0, V1 = 0, CF = 0, weightedCF = 0;
     ativos.forEach(inv => {
@@ -1016,13 +1023,13 @@ function cdiReturnMD(ativos, inicio, fim, ref, today) {
         if (inv.dataAplicacao < inicio) {
             const vi = aporte * fatorAcumulado(ref.historicoCDI, inv.dataAplicacao, inicio, 1, true);
             V0 += vi;
-            V1 += vi * fatorAcumulado(ref.historicoCDI, inicio, fim, 1, false);
+            V1 += vi * fatorAcumulado(ref.historicoCDI, inicio, limiteFim, 1, false);
         }
         else {
             CF += aporte;
             const w = Math.max(0, Math.min(1, diffDays(inv.dataAplicacao, fim) / totalDays));
             weightedCF += aporte * w;
-            V1 += aporte * fatorAcumulado(ref.historicoCDI, inv.dataAplicacao, fim, 1, true);
+            V1 += aporte * fatorAcumulado(ref.historicoCDI, inv.dataAplicacao, limiteFim, 1, true);
         }
     });
     const den = V0 + weightedCF;
